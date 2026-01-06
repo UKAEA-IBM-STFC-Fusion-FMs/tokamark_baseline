@@ -1,0 +1,16 @@
+cnn_settings:
+  D: 64
+
+dataloader_setting:
+  # batch_size: 256
+  # num_workers: 32
+  batch_size: 32
+  num_workers: 32
+
+training_args:
+  lr: 0.00001
+  max_epochs: 500
+  patience: 5
+
+paths:
+  data_output_directory: /output/cnn_model_test/
