@@ -2,7 +2,7 @@ from globals import REPO_ROOT
 from torchinfo import summary
 
 # Set device
-from pipelines.utils.device_utils import get_device
+from pipeline_tools.utils import get_device
 
 device = get_device()
 # print(f"Using device: {device}\n")
