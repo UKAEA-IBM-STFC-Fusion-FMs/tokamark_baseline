@@ -1,14 +1,16 @@
 cnn_settings:
-  D: 64
+  D: 32
 
 dataloader_setting:
-  # batch_size: 256
-  # num_workers: 32
+  # batch_size: 8
+  # num_workers: 4
   batch_size: 32
-  num_workers: 32
+  num_workers: 16
+  shuffle: True
 
 training_args:
-  lr: 0.00001
+  # lr: 0.00001
+  lr: 0.001
   max_epochs: 500
   patience: 5
 

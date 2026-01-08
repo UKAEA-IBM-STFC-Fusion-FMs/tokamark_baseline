@@ -3,24 +3,28 @@ import yaml
 from multiprocessing import cpu_count
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
-import pipeline_tools
 
 # -------------------------------------------------------------------
 # Repo-specific imports
 # -------------------------------------------------------------------
 from globals import REPO_ROOT, TOOLS_DIR
 
-from pipeline_tools.utils import get_device
+from scripts.pipeline_tools.utils import get_device
+from scripts.pipeline_tools.utils import get_train_test_val_shots
 
-from pipeline_tools.transforms.compose_transform import (
+from scripts.pipeline_tools.transforms.compose_transform import (
     ComposeTransforms,
 )
 
-from pipeline_tools.initialize_dataset_and_metadata import (
-    initialize_datasets_and_metadata_for_task,
+from scripts.pipeline_tools.initialize_MAST_dataset import (
+    initialize_MAST_dataset,
 )
 
-from pipeline_tools.initialize_model_dataset import (
+from scripts.pipeline_tools.get_task_metadata import (
+    get_task_metadata,
+)
+
+from scripts.pipeline_tools.initialize_model_dataset import (
     initialize_model_dataset,
 )
 
@@ -71,12 +75,41 @@ if __name__ == "__main__":
         config_cnn = yaml.safe_load(f)
 
     # -------------------------------------------------------------------
-    # Initialize datasets and metadata
+    # Initialize task-specific metadata
     # -------------------------------------------------------------------
 
+    dict_task_metadata = get_task_metadata(
+        config_task,
+        verbose=False
+    )
 
-    datasets_train_val_test, dict_metadata = initialize_datasets_and_metadata_for_task(
-        config_task
+    # -------------------------------------------------------------------
+    # Initialize MAST datasets
+    # -------------------------------------------------------------------
+
+    train_shots_, test_shots_, val_shots_ = get_train_test_val_shots(
+        max_index=config_task["subset_of_shots"]
+    )
+
+    train_MAST_dataset = initialize_MAST_dataset( 
+        config_task,
+        train_shots_,
+        use_std_scaling = True,
+        return_incomplete_shots=True
+    )
+
+    val_MAST_dataset = initialize_MAST_dataset( 
+        config_task,
+        val_shots_,
+        use_std_scaling = True,
+        return_incomplete_shots=True
+    )
+
+    test_MAST_dataset = initialize_MAST_dataset( 
+        config_task,
+        test_shots_,
+        use_std_scaling = True,
+        return_incomplete_shots=True
     )
 
     # -------------------------------------------------------------------
@@ -85,12 +118,12 @@ if __name__ == "__main__":
 
     model_specific_transform = ComposeTransforms(
         [
-            TimeCNNTransform(dict_metadata),
+            TimeCNNTransform(dict_task_metadata),
         ]
     )
 
     train_dataset = initialize_model_dataset(
-        datasets_train_val_test["train"], dict_metadata, config_task, model_specific_transform
+        train_MAST_dataset, dict_task_metadata, config_task, model_specific_transform
     )
     train_dataloader = DataLoader(
             dataset=train_dataset,
@@ -99,7 +132,7 @@ if __name__ == "__main__":
         )
 
     val_dataset = initialize_model_dataset(
-        datasets_train_val_test["val"], dict_metadata, config_task, model_specific_transform
+        val_MAST_dataset, dict_task_metadata, config_task, model_specific_transform
     )
     val_dataloader = DataLoader(
             dataset=val_dataset,
@@ -108,7 +141,7 @@ if __name__ == "__main__":
         )
     
     test_dataset = initialize_model_dataset(
-        datasets_train_val_test["test"], dict_metadata, config_task, model_specific_transform
+        test_MAST_dataset, dict_task_metadata, config_task, model_specific_transform
     )
     test_dataloader = DataLoader(
             dataset=test_dataset,
@@ -129,7 +162,7 @@ if __name__ == "__main__":
         val_dataloader=val_dataloader,
         **config_cnn["training_args"],
         output_dir=REPO_ROOT
-        + config_cnn["paths"]["data_output_directory"]
+        + config_cnn["paths"]["data_output_directory"] 
         + config_task["task_name"]
         + "/",
         verbose=True,
