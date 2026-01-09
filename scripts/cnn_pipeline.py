@@ -90,6 +90,7 @@ if __name__ == "__main__":
         use_std_scaling = True,
         return_incomplete_shots=True
     )
+    print("len(train_MAST_dataset) is ", len(train_MAST_dataset))
 
     val_MAST_dataset = initialize_MAST_dataset( 
         config_task,
