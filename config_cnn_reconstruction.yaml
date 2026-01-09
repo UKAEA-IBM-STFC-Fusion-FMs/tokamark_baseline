@@ -1,3 +1,6 @@
+subset_of_shots: 512
+local: true
+
 cnn_settings:
   D: 32
 

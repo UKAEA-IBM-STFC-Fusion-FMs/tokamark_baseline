@@ -9,23 +9,14 @@ from torch.utils.data import DataLoader
 # -------------------------------------------------------------------
 from globals import REPO_ROOT, TOOLS_DIR
 
-from scripts.pipeline_tools.utils import get_device
-from scripts.pipeline_tools.utils import get_train_test_val_shots
-
-from scripts.pipeline_tools.transforms.compose_transform import (
+from MAST_benchmark.tools.utils import get_device
+from MAST_benchmark.data_split import get_train_test_val_shots
+from MAST_benchmark.tasks import get_task_config, get_task_metadata
+from MAST_benchmark.tools.transforms.compose_transform import (
     ComposeTransforms,
 )
-
-from scripts.pipeline_tools.initialize_MAST_dataset import (
-    initialize_MAST_dataset,
-)
-
-from scripts.pipeline_tools.get_task_metadata import (
-    get_task_metadata,
-)
-
-from scripts.pipeline_tools.initialize_model_dataset import (
-    initialize_model_dataset,
+from MAST_benchmark.data import (
+    initialize_MAST_dataset, initialize_model_dataset
 )
 
 from timecnn_transform import (
@@ -53,10 +44,10 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--config_task",
+        "--task",
         type=str,
-        default="/configs_task/task_1_reconstruction/config_task_1-1.yaml",
-        help="Path to the task YAML config file",
+        default="task_1-1",
+        help="The name of the task available in the benchmark",
     )
     parser.add_argument(
         "--config_cnn",
@@ -67,8 +58,7 @@ if __name__ == "__main__":
     args, _ = parser.parse_known_args()
 
     # Load Task YAML config
-    with open(TOOLS_DIR + args.config_task, "r") as f:
-        config_task = yaml.safe_load(f)
+    config_task = get_task_config(args.task)    
 
     # Load CNN YAML config
     with open(REPO_ROOT + args.config_cnn, "r") as f:
@@ -88,12 +78,15 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------
 
     train_shots_, test_shots_, val_shots_ = get_train_test_val_shots(
-        max_index=config_task["subset_of_shots"]
+        max_index=config_cnn["subset_of_shots"]
     )
+
+    local_flag = config_cnn["local"]
 
     train_MAST_dataset = initialize_MAST_dataset( 
         config_task,
         train_shots_,
+        local_flag = local_flag,
         use_std_scaling = True,
         return_incomplete_shots=True
     )
@@ -101,6 +94,7 @@ if __name__ == "__main__":
     val_MAST_dataset = initialize_MAST_dataset( 
         config_task,
         val_shots_,
+        local_flag = local_flag,
         use_std_scaling = True,
         return_incomplete_shots=True
     )
@@ -108,6 +102,7 @@ if __name__ == "__main__":
     test_MAST_dataset = initialize_MAST_dataset( 
         config_task,
         test_shots_,
+        local_flag = local_flag,
         use_std_scaling = True,
         return_incomplete_shots=True
     )
