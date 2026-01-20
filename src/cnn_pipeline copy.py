@@ -1,3 +1,4 @@
+import os
 import argparse
 import yaml
 from multiprocessing import cpu_count
@@ -7,6 +8,9 @@ from torch.utils.data import DataLoader
 # -------------------------------------------------------------------
 # Repo-specific imports
 # -------------------------------------------------------------------
+# import sys 
+# print(sys.path)
+# from .globals import REPO_ROOT, TOOLS_DIR
 from globals import REPO_ROOT, TOOLS_DIR
 
 from MAST_benchmark.tools.utils import get_device
@@ -22,6 +26,7 @@ from MAST_benchmark.data import (
 from timecnn_transform import (
     TimeCNNTransform,
 )
+
 from cnn_utils import (
     cnn_training_collate_fn,
     create_cnn_architecture,
@@ -52,7 +57,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_cnn",
         type=str,
-        default="/config_cnn_reconstruction.yaml",
+        default="/config_cnn_test.yaml",
         help="Path to the model YAML config file",
     )
     args, _ = parser.parse_known_args()
@@ -88,7 +93,9 @@ if __name__ == "__main__":
         train_shots_,
         local_flag = local_flag,
         use_std_scaling = True,
-        return_incomplete_shots=True
+        return_incomplete_shots=True,
+        remove_outliers=True,
+        verbose=False
     )
     print("len(train_MAST_dataset) is ", len(train_MAST_dataset))
 
@@ -97,7 +104,9 @@ if __name__ == "__main__":
         val_shots_,
         local_flag = local_flag,
         use_std_scaling = True,
-        return_incomplete_shots=True
+        return_incomplete_shots=True,
+        remove_outliers=True,
+        verbose=False
     )
 
     test_MAST_dataset = initialize_MAST_dataset( 
@@ -105,7 +114,9 @@ if __name__ == "__main__":
         test_shots_,
         local_flag = local_flag,
         use_std_scaling = True,
-        return_incomplete_shots=True
+        return_incomplete_shots=True,
+        remove_outliers=True,
+        verbose=False
     )
 
     # -------------------------------------------------------------------
@@ -152,15 +163,38 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------
     # Training loop
     # -------------------------------------------------------------------
+
+    base_model_dir = (
+        REPO_ROOT
+        + config_cnn["paths"]["data_output_directory"]
+        + config_task["task_name"]
+        + "/"
+    )
+    model_dir = base_model_dir
+    counter = 1
+    # If folder exists → create new version
+    while os.path.exists(model_dir):
+        model_dir = base_model_dir.rstrip("/") + f"run_{counter}/"
+        counter += 1
+    # Create directory
+    os.makedirs(model_dir, exist_ok=True)
+    # print(f"Saving model to: {model_dir}")
+
     best_model_state, early_stop = loop_for_cnn_training(
         base_cnn_model=cnn_model,
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
         **config_cnn["training_args"],
-        output_dir=REPO_ROOT
-        + config_cnn["paths"]["data_output_directory"] 
-        + config_task["task_name"]
-        + "/",
+        output_dir=model_dir,
+        verbose=True,
+    )
+
+    best_model_state, early_stop = loop_for_cnn_training(
+        base_cnn_model=cnn_model,
+        train_dataloader=train_dataloader,
+        val_dataloader=val_dataloader,
+        **config_cnn["training_args"],
+        output_dir=model_dir,
         verbose=True,
     )
 
