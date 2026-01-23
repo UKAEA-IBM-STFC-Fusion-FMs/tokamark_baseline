@@ -10,8 +10,8 @@ from torch.utils.data import DataLoader
 # -------------------------------------------------------------------
 # import sys 
 # print(sys.path)
-# from .globals import REPO_ROOT, TOOLS_DIR
-from globals import REPO_ROOT, TOOLS_DIR
+# from .globals import REPO_ROOT
+from globals import REPO_ROOT
 
 from MAST_benchmark.tools.utils import get_device
 from MAST_benchmark.data_split import get_train_test_val_shots
@@ -31,7 +31,7 @@ from cnn_utils import (
     cnn_training_collate_fn,
     create_cnn_architecture,
     loop_for_cnn_training,
-    cnn_evaluation_per_shot,
+    cnn_unstd_evaluation_per_shot,
     cnn_save_traces_per_shot,
 )
 
@@ -153,7 +153,9 @@ if __name__ == "__main__":
     test_dataloader = DataLoader(
             dataset=test_dataset,
             collate_fn=cnn_training_collate_fn,
-            **config_cnn["dataloader_setting"]
+            # **config_cnn["dataloader_setting"]
+            batch_size = 8,
+            num_workers = 0
         )
 
     cnn_model = create_cnn_architecture(
@@ -164,36 +166,45 @@ if __name__ == "__main__":
     # Training loop
     # -------------------------------------------------------------------
 
-    base_model_dir = (
-        REPO_ROOT
-        + config_cnn["paths"]["data_output_directory"]
-        + config_task["task_name"]
-        + "/"
-    )
-    model_dir = base_model_dir
-    counter = 1
-    # If folder exists → create new version
-    while os.path.exists(model_dir):
-        model_dir = base_model_dir.rstrip("/") + f"run_{counter}/"
-        counter += 1
-    # Create directory
-    os.makedirs(model_dir, exist_ok=True)
-    # print(f"Saving model to: {model_dir}")
+    # base_model_dir = (
+    #     REPO_ROOT
+    #     + config_cnn["paths"]["data_output_directory"]
+    #     + config_task["task_name"]
+    #     + "/"
+    # )
+    # model_dir = base_model_dir
+    # counter = 1
+    # # If folder exists → create new version
+    # while os.path.exists(model_dir):
+    #     model_dir = base_model_dir.rstrip("/") + f"run_{counter}/"
+    #     counter += 1
+    # # Create directory
+    # os.makedirs(model_dir, exist_ok=True)
+    # # print(f"Saving model to: {model_dir}")
 
-    best_model_state, early_stop = loop_for_cnn_training(
-        base_cnn_model=cnn_model,
-        train_dataloader=train_dataloader,
-        val_dataloader=val_dataloader,
-        **config_cnn["training_args"],
-        output_dir=model_dir,
-        verbose=True,
-    )
+    # best_model_state, early_stop = loop_for_cnn_training(
+    #     base_cnn_model=cnn_model,
+    #     train_dataloader=train_dataloader,
+    #     val_dataloader=val_dataloader,
+    #     **config_cnn["training_args"],
+    #     output_dir=model_dir,
+    #     verbose=True,
+    # )
+
+    # best_model_state, early_stop = loop_for_cnn_training(
+    #     base_cnn_model=cnn_model,
+    #     train_dataloader=train_dataloader,
+    #     val_dataloader=val_dataloader,
+    #     **config_cnn["training_args"],
+    #     output_dir=model_dir,
+    #     verbose=True,
+    # )
 
     # -------------------------------------------------------------------
     # Evaluation loop
     # -------------------------------------------------------------------
-
-    # cnn_evaluation_per_shot(test_dataloader, config_task, cnn_model, config_cnn)
+    print(config_cnn)
+    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, config_cnn)
 
     # cnn_save_traces_per_shot(
     #     test_dataloader, config_task, cnn_model, config_cnn, n_traces=10
