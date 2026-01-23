@@ -9,9 +9,11 @@ device = get_device()
 
 import os
 import psutil
+import shutil
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -21,6 +23,7 @@ from torch.utils.data._utils.collate import default_collate
 from MAST_benchmark.tasks import get_task_metadata
 
 from time_cnn_model import MultiBranchTimeCNNModel
+from time_cnn_model_v2 import MultiBranchTimeCNNModel_v2
 
 # ----------------------------------------------------------------------------------------------------------------------
 # COLLATE FUNCTION
@@ -28,7 +31,7 @@ from time_cnn_model import MultiBranchTimeCNNModel
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-def cnn_training_collate_fn(batch, verbose=False):
+def cnn_training_collate_fn(batch, verbose=True):
     # print(f"Collating batch of size {len(batch)}")
 
     # proc = psutil.Process(os.getpid())
@@ -92,6 +95,42 @@ def create_cnn_architecture(dataloader_, D, verbose=False):
             continue
 
     cnn_model = MultiBranchTimeCNNModel(input_shapes, output_shape, D).to(device)
+
+    input_size = [ (2,) + shape for shape in input_shapes ]
+    summary(cnn_model, input_size=input_size)
+
+    return cnn_model
+
+# ----------------------------------------------------------------------------------------------------------------------
+def create_cnn_v2_architecture(dataloader_, D, verbose=False):
+    if verbose:
+        print("\n\n----------MODEL INITIALIZATION V2 CNN----------\n")
+
+    for l in range(len(dataloader_.dataset)):
+        try:
+            # Get the generator from __getitem__
+            windows_gen = dataloader_.dataset[l]  # this is now a generator
+            first_window = next(windows_gen)  # get the first yielded window
+            input_shapes = [arr.shape for arr in first_window["x"]]
+            output_shape = [arr.shape for arr in first_window["y"]]
+
+            # input_shapes = [arr.shape for arr in dataloader_.dataset[l][0]['x']]
+            # output_shape = [arr.shape for arr in dataloader_.dataset[l][0]['y']]
+
+            if verbose:
+                print(f"Shot {dataloader_.dataset.get_shot_id(l)}")
+                print(f"input_shapes: {input_shapes}")
+                print(f"output_shape: {output_shape}")
+
+            break  # stop after first successful shot
+
+        except Exception as e:
+            print(
+                f"Skipping {dataloader_.dataset.get_shot_id(l)} because shot not trainable: {e}"
+            )
+            continue
+
+    cnn_model = MultiBranchTimeCNNModel_v2(input_shapes, output_shape, D).to(device)
 
     input_size = [ (2,) + shape for shape in input_shapes ]
     summary(cnn_model, input_size=input_size)
@@ -242,109 +281,11 @@ def loop_for_cnn_training(
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-def cnn_evaluation_per_shot(
-    test_dataloader,
-    config_task,
-    cnn_model,
-    config_cnn,
-    # device="cuda" if torch.cuda.is_available() else "cpu"
-):
-    """
-    Evaluate CNN per shot/window and save incremental RMSEs to CSV.
-    """
-
-    # === Setup paths ===
-    output_dir = (
-        REPO_ROOT
-        + config_cnn["paths"]["data_output_directory"]
-        + config_task["task_name"]
-    )
-    best_model_path = output_dir + "/best_model.pt"
-    csv_path = output_dir + "/rmse_and_mse_per_sample.csv"
-
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-
-    # Load best model
-    cnn_model.load_state_dict(torch.load(best_model_path, map_location=device))
-    cnn_model.to(device)
-    cnn_model.eval()
-
-    feature_names = config_task["sources_and_signals"].get("output_name", [])
-
-    # Initialize CSV if it doesn’t exist
-    if not os.path.exists(csv_path):
-        pd.DataFrame(
-            columns=["shot_id", "window_id", "feature_name", "RMSE", "MSE"]
-        ).to_csv(csv_path, index=False)
-
-    # === Evaluation loop ===
-    with torch.no_grad():
-        for batch_idx, batch in enumerate(test_dataloader):
-            if batch is None:
-                continue
-
-            shot_id, window_id, x_test, y_test = batch
-
-            # Move inputs and labels to device
-            x_test = [arr.to(torch.float32).to(device) for arr in x_test]
-            y_test = [arr.to(torch.float32).to(device) for arr in y_test]
-
-            # Model prediction
-            y_pred = cnn_model(*x_test)
-
-            # Make sure y_pred is list-like
-            if not isinstance(y_pred, (list, tuple)):
-                y_pred = [y_pred]
-
-            batch_rows = []
-
-            # === Compute RMSEs per feature ===
-            for i, feature_name in enumerate(feature_names):
-                y_t = (
-                    y_test[i]
-                    .detach()
-                    .cpu()
-                    .squeeze(1)
-                    .reshape(len(shot_id), -1)
-                    .numpy()
-                )
-                y_p = (
-                    y_pred[i]
-                    .detach()
-                    .cpu()
-                    .squeeze(1)
-                    .reshape(len(shot_id), -1)
-                    .numpy()
-                )
-
-                rmse_per_sample = np.sqrt(np.mean((y_t - y_p) ** 2, axis=1))
-                mse_per_sample = np.mean((y_t - y_p) ** 2, axis=1)
-
-                for sid, wid, rmse_val, mse_val in zip(
-                    shot_id, window_id, rmse_per_sample, mse_per_sample
-                ):
-                    batch_rows.append(
-                        {
-                            "shot_id": sid.item() if torch.is_tensor(sid) else sid,
-                            "window_id": wid.item() if torch.is_tensor(wid) else wid,
-                            "feature_name": f"{feature_name[0]}-{feature_name[1]}",
-                            "RMSE": rmse_val,
-                            "MSE": mse_val,
-                        }
-                    )
-
-            # === Append to CSV ===
-            df_batch = pd.DataFrame(batch_rows)
-            df_batch.to_csv(csv_path, mode="a", header=False, index=False)
-
-    print(f"✅ Evaluation done. RMSEs and MSEs saved (incrementally) to: {csv_path}")
-
-
 def cnn_unstd_evaluation_per_shot(
     test_dataloader,
     config_task,
     cnn_model,
-    config_cnn,
+    output_dir,
     # device="cuda" if torch.cuda.is_available() else "cpu"
 ):
     """
@@ -353,16 +294,12 @@ def cnn_unstd_evaluation_per_shot(
 
     print("in cnn_unstd_evaluation_per_shot")
 
-    # === Setup paths ===
-    output_dir = (
-        REPO_ROOT
-        + config_cnn["paths"]["data_output_directory"]
-        + config_task["task_name"]
-    )
-    best_model_path = output_dir + "/best_model.pt"
-    csv_path = output_dir + "/rmse_mse_mae_per_window.csv"
+    best_model_path = output_dir + "best_model.pt"
+    csv_path = output_dir + f"{config_task['task_name']}_evaluation_per_window_NEW.csv"
 
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    # remove old file if present
+    if os.path.exists(csv_path):
+        os.remove(csv_path)
 
     # Load best model
     cnn_model.load_state_dict(torch.load(best_model_path, map_location=device))
@@ -379,7 +316,8 @@ def cnn_unstd_evaluation_per_shot(
     # Initialize CSV if it doesn’t exist
     if not os.path.exists(csv_path):
         pd.DataFrame(
-            columns=["shot_id", "window_id", "feature_name", "RMSE", "MSE", "MAE"]
+            # columns=["shot_id", "window_id", "feature_name", "global_mean", "global_std", "RMSE", "MSE", "MAE"]
+            columns=["shot_id", "window_id", "feature_name", "norm", "RMSE", "MSE", "MAE"]
         ).to_csv(csv_path, index=False)
 
     # === Evaluation loop ===
@@ -405,6 +343,7 @@ def cnn_unstd_evaluation_per_shot(
 
             # === Compute RMSEs per feature ===
             for i, feature_name in enumerate(feature_names):
+
                 y_t = (
                     y_test[i]
                     .detach()
@@ -423,22 +362,26 @@ def cnn_unstd_evaluation_per_shot(
                 )
 
                 mean = dict_task_metadata['output'][f"{feature_name[0]}-{feature_name[1]}"]['mean']
-                std = dict_task_metadata['output'][f"{feature_name[0]}-{feature_name[1]}"]['mean']
+                std = dict_task_metadata['output'][f"{feature_name[0]}-{feature_name[1]}"]['std']
 
                 unstd_y_t = y_t*std + mean
-                unstd_y_p = y_p*std + mean
+                unstd_y_p = y_p*std + mean 
 
                 rmse_per_sample = np.sqrt(np.mean((unstd_y_t - unstd_y_p) ** 2, axis=1))
+                rmst_per_sample = np.sqrt(np.mean((unstd_y_t) ** 2, axis=1))
                 mse_per_sample = np.mean((unstd_y_t - unstd_y_p) ** 2, axis=1)
                 mae_per_sample = np.mean(np.abs(unstd_y_t - unstd_y_p), axis=1)
 
-                for sid, wid, rmse_val, mse_val, mae_val in zip(
-                    shot_id, window_id, rmse_per_sample, mse_per_sample, mae_per_sample
+                for sid, wid, rmse_val, mse_val, mae_val, norm in zip(
+                    shot_id, window_id, rmse_per_sample, mse_per_sample, mae_per_sample, rmst_per_sample
                 ):
                     row = pd.DataFrame([{
                         "shot_id": sid.item() if torch.is_tensor(sid) else sid,
                         "window_id": wid.item() if torch.is_tensor(wid) else wid,
                         "feature_name": f"{feature_name[0]}-{feature_name[1]}",
+                        # "global_mean": mean,
+                        # "global_std": std,
+                        "norm": norm,
                         "RMSE": rmse_val,
                         "MSE": mse_val,
                         "MAE": mae_val,
@@ -450,7 +393,211 @@ def cnn_unstd_evaluation_per_shot(
                 f.flush()
                 os.fsync(f.fileno())
 
-    print(f"✅ Evaluation done. RMSEs and MSEs saved (incrementally) to: {csv_path}")
+    print(f"✅ UNSTD Evaluation done. RMSEs and MSEs saved (incrementally) to: {csv_path}")
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+def cnn_sanity_vizu_per_shot(
+    test_dataloader,
+    config_task,
+    cnn_model,
+    output_dir,
+    n_shot_to_plot = 3
+    # device="cuda" if torch.cuda.is_available() else "cpu"
+):
+    """
+    Plot some shots CNN per shot/window and save incremental RMSEs to CSV.
+    """
+
+    # === Setup paths ===
+    best_model_path = output_dir + "best_model.pt"
+
+    # Load best model
+    cnn_model.load_state_dict(torch.load(best_model_path, map_location=device))
+    cnn_model.to(device)
+    cnn_model.eval()
+
+    feature_names = config_task["sources_and_signals"].get("output_name", [])
+    
+    dict_task_metadata = get_task_metadata(
+        config_task,
+        verbose=False
+    )
+
+    # === Evaluation loop ===
+    counter = 0
+
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(test_dataloader):
+            
+            if counter>=n_shot_to_plot:
+                break
+
+            if batch is None:
+                continue
+
+            counter +=1
+
+            shot_id, window_id, x_test, y_test = batch
+
+            plot_dir = output_dir + f"sanity_vizu/shot_{shot_id[0]}/"
+            os.makedirs(plot_dir, exist_ok=True)
+
+            # Move inputs and labels to device
+            x_test = [arr.to(torch.float32).to(device) for arr in x_test]
+            y_test = [arr.to(torch.float32).to(device) for arr in y_test]
+
+            # Model prediction
+            y_pred = cnn_model(*x_test)
+
+            # Make sure y_pred is list-like
+            if not isinstance(y_pred, (list, tuple)):
+                y_pred = [y_pred]
+
+            batch_rows = []
+
+            # === Compute RMSEs per feature ===
+            for i, feature_name in enumerate(feature_names):
+
+                print(f"{feature_name[0]}-{feature_name[1]}")
+
+                y_t = (
+                    y_test[i]
+                    .detach()
+                    .cpu()
+                    .squeeze(1)
+                    # .reshape(len(shot_id), -1)
+                    .numpy()
+                )
+                y_p = (
+                    y_pred[i]
+                    .detach()
+                    .cpu()
+                    .squeeze(1)
+                    # .reshape(len(shot_id), -1)
+                    .numpy()
+                )
+
+                mean = dict_task_metadata['output'][f"{feature_name[0]}-{feature_name[1]}"]['mean']
+                std = dict_task_metadata['output'][f"{feature_name[0]}-{feature_name[1]}"]['std']
+
+                unstd_y_t = y_t*std + mean
+                unstd_y_p = y_p*std + mean 
+
+                if unstd_y_t.ndim==2:
+
+                    plt.figure(figsize=(10,5))
+
+                    plt.plot(unstd_y_t[:, 0], label=f"True")
+                    plt.plot(unstd_y_p[:, 0], '--', label=f"Pred")
+
+                    plt.title("True vs Predicted")
+                    plt.xlabel("Sample")
+                    plt.ylabel("Value")
+                    plt.legend()
+                    plt.grid(True)
+                
+                elif (unstd_y_t.ndim==3 and unstd_y_t.shape[2] == 2):
+                    
+                    n_dim = unstd_y_t.shape[-1]
+                    print(unstd_y_t.shape)
+
+                    plt.figure(figsize=(10,5))
+
+                    # Line plots
+                    colors = plt.cm.tab10.colors
+                    
+                    for k in range(n_dim): 
+                        c = colors[k % len(colors)]
+                        plt.plot(unstd_y_t[:, 0, k], label=f"True {k+1}", color=c)
+                        plt.plot(unstd_y_p[:, 0, k], '--', label=f"Pred {k+1}", color=c)
+
+                    plt.title("True vs Predicted")
+                    plt.xlabel("Sample")
+                    plt.ylabel("Value")
+                    plt.legend()
+                    plt.grid(True)
+                
+                elif unstd_y_t.ndim==4 :
+
+                    n_time = np.linspace(0, unstd_y_p.shape[0] - 1, 5, dtype=int)
+
+                    fig, axes = plt.subplots(3, len(n_time), figsize=(30, 15))
+
+                    # Handle case where n_time = 1 (axes is 1D instead of 2D)
+                    if len(n_time) == 1:
+                        axes = axes.reshape(1, -1)
+
+                    for i, t in enumerate(n_time):
+ 
+                        print(t)
+
+                        y_p_t = unstd_y_p[t, 0]
+                        y_t_t = unstd_y_t[t, 0]
+
+                        # Heatmap
+                        error = y_p_t - y_t_t
+
+                        # Subplot 1: True values heatmap
+                        im1 = axes[0, i].imshow(y_t_t.T, aspect="auto", cmap="viridis")
+                        fig.colorbar(im1, ax=axes[0, i], label="True Value")
+                        axes[0, i].set_title(f"True Values (t={t})")
+                        axes[0, i].set_xlabel("Sample")
+                        axes[0, i].set_ylabel("Output Dimension")
+
+                        # Subplot 2: Predicted values heatmap
+                        im2 = axes[1, i].imshow(y_p_t.T, aspect="auto", cmap="viridis")
+                        fig.colorbar(im2, ax=axes[1, i], label="Predicted Value")
+                        axes[1, i].set_title(f"Predicted Values (t={t})")
+                        axes[1, i].set_xlabel("Sample")
+                        axes[1, i].set_ylabel("Output Dimension")
+
+                        # Subplot 3: Error heatmap
+                        im3 = axes[2, i].imshow(error.T, aspect="auto", cmap="coolwarm")
+                        fig.colorbar(im3, ax=axes[2, i], label="Prediction Error")
+                        axes[2, i].set_title(f"Prediction Error (t={t})")
+                        axes[2, i].set_xlabel("Sample")
+                        axes[2, i].set_ylabel("Output Dimension")
+
+                else:
+
+                    plt.figure(figsize=(10,5))
+
+                    flat_y_p = unstd_y_p.reshape(len(shot_id), -1)
+                    flat_y_t = unstd_y_t.reshape(len(shot_id), -1)
+
+                    # Heatmap
+                    error = flat_y_p - flat_y_t
+
+                    # Subplot 1: True values heatmap
+                    plt.subplot(1, 3, 1)
+                    im1 = plt.imshow(flat_y_t.T, aspect="auto", cmap="viridis")
+                    plt.colorbar(im1, label="True Value")
+                    plt.title("True Values")
+                    plt.xlabel("Sample")
+                    plt.ylabel("Output Dimension")
+
+                    # Subplot 2: Predicted values heatmap
+                    plt.subplot(1, 3, 2)
+                    im2 = plt.imshow(flat_y_p.T, aspect="auto", cmap="viridis")
+                    plt.colorbar(im2, label="Predicted Value")
+                    plt.title("Predicted Values")
+                    plt.xlabel("Sample")
+                    plt.ylabel("Output Dimension")
+
+                    # Subplot 3: Error heatmap
+                    plt.subplot(1, 3, 3)
+                    im3 = plt.imshow(error.T, aspect="auto", cmap="coolwarm")
+                    plt.colorbar(im3, label="Prediction Error")
+                    plt.title("Prediction Error")
+                    plt.xlabel("Sample")
+                    plt.ylabel("Output Dimension")
+
+                plt.tight_layout()
+                plt.savefig(plot_dir + f"prediction_plot_{feature_name[0]}-{feature_name[1]}.png", dpi=300, bbox_inches="tight")
+                plt.close()  # <- this frees memory
+
+    print(f"Visualization saved. Go check in: {output_dir}")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
