@@ -1,4 +1,3 @@
-from globals import REPO_ROOT
 from torchinfo import summary
 
 # Set device
@@ -8,11 +7,8 @@ device = get_device()
 # print(f"Using device: {device}\n")
 
 import os
-import psutil
-import shutil
 
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 import torch
@@ -22,53 +18,46 @@ from torch.utils.data._utils.collate import default_collate
 
 from MAST_benchmark.tasks import get_task_metadata
 
-from time_cnn_model import MultiBranchTimeCNNModel
-from time_cnn_model_v2 import MultiBranchTimeCNNModel_v2
+# from time_cnn_model import MultiBranchTimeCNNModel
+from time_cnn_model_v5 import MultiBranchTimeCNNModel_v5
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # COLLATE FUNCTION
 # ----------------------------------------------------------------------------------------------------------------------
 
-
 # ----------------------------------------------------------------------------------------------------------------------
-def cnn_training_collate_fn(batch, verbose=True):
-    # print(f"Collating batch of size {len(batch)}")
+def cnn_filled_training_collate_fn(batch, verbose=True):
 
     # proc = psutil.Process(os.getpid())
     # mem = proc.memory_info().rss / (1024**2)
     # print(f"[Worker PID={proc.pid}] Memory={mem:.2f} MB")
 
     # Flatten the batch of lists into a single list
-    # print(batch)
-    flattened_batch = [
-        (item["shot_id"], item["window_index"], item["x"], item["y"])
+    full_flattened_batch = [
+        (item["shot_id"], item["window_index"], 
+        [np.nan_to_num(np.array(x), nan=0.0) for x in item["x"]],
+        [np.nan_to_num(np.array(y), nan=0.0) for y in item["y"]])
         for sublist in batch
         for item in sublist
-        if not (
-            any(np.isnan(np.array(x)).any() for x in item["x"])
-            or any(np.isnan(np.array(y)).any() for y in item["y"])
-        )
     ]
 
     if verbose:
         print(
-            f"Number of samples from batch = {len(batch)} shots is N = {len(flattened_batch)}"
+            f"Collating batch of size = {len(batch)} shots to N = {len(full_flattened_batch)}"
         )
-        if len(flattened_batch) == 0:
-            print("batch is None")
 
-    return default_collate(flattened_batch) if (len(flattened_batch) > 0) else None
+    return default_collate(full_flattened_batch) if (len(full_flattened_batch) > 0) else None
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # CNN TRAINING
 # ----------------------------------------------------------------------------------------------------------------------
 
-
 # ----------------------------------------------------------------------------------------------------------------------
-def create_cnn_architecture(dataloader_, D, verbose=False):
+def create_cnn_v5_architecture(dataloader_, D, verbose=False):
     if verbose:
-        print("\n\n----------MODEL INITIALIZATION----------\n")
+        print("\n\n----------MODEL INITIALIZATION V4 CNN----------\n")
 
     for l in range(len(dataloader_.dataset)):
         try:
@@ -77,9 +66,6 @@ def create_cnn_architecture(dataloader_, D, verbose=False):
             first_window = next(windows_gen)  # get the first yielded window
             input_shapes = [arr.shape for arr in first_window["x"]]
             output_shape = [arr.shape for arr in first_window["y"]]
-
-            # input_shapes = [arr.shape for arr in dataloader_.dataset[l][0]['x']]
-            # output_shape = [arr.shape for arr in dataloader_.dataset[l][0]['y']]
 
             if verbose:
                 print(f"Shot {dataloader_.dataset.get_shot_id(l)}")
@@ -94,49 +80,12 @@ def create_cnn_architecture(dataloader_, D, verbose=False):
             )
             continue
 
-    cnn_model = MultiBranchTimeCNNModel(input_shapes, output_shape, D).to(device)
+    cnn_model = MultiBranchTimeCNNModel_v5(input_shapes, output_shape, D).to(device)
 
     input_size = [ (2,) + shape for shape in input_shapes ]
     summary(cnn_model, input_size=input_size)
 
     return cnn_model
-
-# ----------------------------------------------------------------------------------------------------------------------
-def create_cnn_v2_architecture(dataloader_, D, verbose=False):
-    if verbose:
-        print("\n\n----------MODEL INITIALIZATION V2 CNN----------\n")
-
-    for l in range(len(dataloader_.dataset)):
-        try:
-            # Get the generator from __getitem__
-            windows_gen = dataloader_.dataset[l]  # this is now a generator
-            first_window = next(windows_gen)  # get the first yielded window
-            input_shapes = [arr.shape for arr in first_window["x"]]
-            output_shape = [arr.shape for arr in first_window["y"]]
-
-            # input_shapes = [arr.shape for arr in dataloader_.dataset[l][0]['x']]
-            # output_shape = [arr.shape for arr in dataloader_.dataset[l][0]['y']]
-
-            if verbose:
-                print(f"Shot {dataloader_.dataset.get_shot_id(l)}")
-                print(f"input_shapes: {input_shapes}")
-                print(f"output_shape: {output_shape}")
-
-            break  # stop after first successful shot
-
-        except Exception as e:
-            print(
-                f"Skipping {dataloader_.dataset.get_shot_id(l)} because shot not trainable: {e}"
-            )
-            continue
-
-    cnn_model = MultiBranchTimeCNNModel_v2(input_shapes, output_shape, D).to(device)
-
-    input_size = [ (2,) + shape for shape in input_shapes ]
-    summary(cnn_model, input_size=input_size)
-
-    return cnn_model
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 class MultiOutputMSELoss(nn.Module):
@@ -183,10 +132,25 @@ def loop_for_cnn_training(
     loss_criterion = MultiOutputMSELoss()
     optimizer = torch.optim.Adam(base_cnn_model.parameters(), lr=lr)
 
+    # 🔑 AMP scaler
+    # scaler = GradScaler('cuda')
+
     best_model_state_ = None
     best_val_loss = float("inf")
     early_stop_ = False
     epochs_no_improve = 0
+
+    history_path = os.path.join(output_dir, "training_history.pt")
+
+    if os.path.exists(history_path):
+        history = torch.load(history_path)
+    else:
+        history = {
+            "epoch": [],
+            "train_loss": [],
+            "val_loss": [],
+        }
+
 
     for epoch in range(max_epochs):
         base_cnn_model.train()
@@ -197,25 +161,51 @@ def loop_for_cnn_training(
             print(f"\nEpoch {epoch + 1}\n")
 
         for batch_idx, batch in enumerate(train_dataloader):
+
+            # print("CPU RAM:", psutil.virtual_memory().used / 1e9, "GB")
+            # print("GPU mem:", torch.cuda.memory_allocated() / 1e9, "GB")
+
             if batch is None:
                 continue
+
+            # if epoch == 0 and batch_idx == 0:
+            #     print("Input dtype:", x_train[0].dtype)
+            #     print("Weight dtype:", next(base_cnn_model.parameters()).dtype)
+            #     print("Output dtype:", outputs_[0].dtype)
 
             shot_id, _, x_train, y_train = batch  # (shot_id, window_id, x_train, y_train)
             # print(np.unique(shot_id))
             actual_batch_size = y_train[0].shape[0]
             # if verbose:
                 # print(f"Batch {batch_idx} size is {actual_batch_size}")
-            x_train = [arr.to(torch.float32).to(device) for arr in x_train]
+            # x_train = [arr.to(torch.float32).to(device) for arr in x_train]
+            # y_train = [arr.to(torch.float32).to(device) for arr in y_train]
+
+            x_train = [arr.to(torch.float32).to(device).requires_grad_(True) for arr in x_train]
+            # print("Checkpoint active, grad:", x_train[0].requires_grad)
             y_train = [arr.to(torch.float32).to(device) for arr in y_train]
+
+            optimizer.zero_grad(set_to_none=True)
+
+            # # 🔑 AMP forward + loss
+            # with autocast('cuda'):
+            #     outputs_ = base_cnn_model(*x_train)
+            #     loss_ = loss_criterion(outputs_, y_train)
+
+            # # 🔑 AMP backward
+            # scaler.scale(loss_).backward()
+            # scaler.step(optimizer)
+            # scaler.update()
 
             outputs_ = base_cnn_model(*x_train)
             loss_ = loss_criterion(outputs_, y_train)
-            # if verbose:
-                # print(f"Batch loss: {loss_}")
-
             optimizer.zero_grad()
             loss_.backward()
             optimizer.step()
+
+            # if verbose:
+            
+            #     print(f"Batch loss: {loss_}")
 
             running_loss += loss_.item() * actual_batch_size
             num_batches += actual_batch_size
@@ -233,6 +223,7 @@ def loop_for_cnn_training(
 
         with torch.no_grad():
             for batch_idx, batch in enumerate(val_dataloader):
+
                 if batch is None:
                     continue
 
@@ -242,12 +233,22 @@ def loop_for_cnn_training(
                 x_val = [arr.to(torch.float32).to(device) for arr in x_val]
                 y_val = [arr.to(torch.float32).to(device) for arr in y_val]
 
+                # # 🔑 AMP also in validation
+                # with autocast():
+                #     val_outputs = base_cnn_model(*x_val)
+                #     val_loss = loss_criterion(val_outputs, y_val)
+
                 val_outputs = base_cnn_model(*x_val)
                 val_loss = loss_criterion(val_outputs, y_val)
                 val_running_loss += val_loss.item() * actual_batch_size
                 val_batches += actual_batch_size
 
         avg_val_loss = val_running_loss / val_batches
+        history["epoch"].append(epoch + 1)
+        history["train_loss"].append(avg_loss)
+        history["val_loss"].append(avg_val_loss)
+
+        torch.save(history, history_path)
 
         if verbose:
             print(
@@ -279,13 +280,13 @@ def loop_for_cnn_training(
 # CNN EVALUATION
 # ----------------------------------------------------------------------------------------------------------------------
 
-
 # ----------------------------------------------------------------------------------------------------------------------
-def cnn_unstd_evaluation_per_shot(
+def NEW_cnn_unstd_evaluation_per_shot(
     test_dataloader,
     config_task,
     cnn_model,
     output_dir,
+    window_metrics
     # device="cuda" if torch.cuda.is_available() else "cpu"
 ):
     """
@@ -295,11 +296,11 @@ def cnn_unstd_evaluation_per_shot(
     print("in cnn_unstd_evaluation_per_shot")
 
     best_model_path = output_dir + "best_model.pt"
-    csv_path = output_dir + f"{config_task['task_name']}_evaluation_per_window_NEW.csv"
+    # csv_path = output_dir + f"{config_task['task_name']}_evaluation_per_window_NEW.csv"
 
     # remove old file if present
-    if os.path.exists(csv_path):
-        os.remove(csv_path)
+    # if os.path.exists(csv_path):
+    #     os.remove(csv_path)
 
     # Load best model
     cnn_model.load_state_dict(torch.load(best_model_path, map_location=device))
@@ -314,11 +315,11 @@ def cnn_unstd_evaluation_per_shot(
     )
 
     # Initialize CSV if it doesn’t exist
-    if not os.path.exists(csv_path):
-        pd.DataFrame(
-            # columns=["shot_id", "window_id", "feature_name", "global_mean", "global_std", "RMSE", "MSE", "MAE"]
-            columns=["shot_id", "window_id", "feature_name", "norm", "RMSE", "MSE", "MAE"]
-        ).to_csv(csv_path, index=False)
+    # if not os.path.exists(csv_path):
+    #     pd.DataFrame(
+    #         # columns=["shot_id", "window_id", "feature_name", "global_mean", "global_std", "RMSE", "MSE", "MAE"]
+    #         columns=["shot_id", "window_id", "feature_name", "norm", "RMSE", "MSE", "MAE"]
+    #     ).to_csv(csv_path, index=False)
 
     # === Evaluation loop ===
     with torch.no_grad():
@@ -339,9 +340,8 @@ def cnn_unstd_evaluation_per_shot(
             if not isinstance(y_pred, (list, tuple)):
                 y_pred = [y_pred]
 
-            batch_rows = []
+            # batch_rows = []
 
-            # === Compute RMSEs per feature ===
             for i, feature_name in enumerate(feature_names):
 
                 y_t = (
@@ -367,33 +367,9 @@ def cnn_unstd_evaluation_per_shot(
                 unstd_y_t = y_t*std + mean
                 unstd_y_p = y_p*std + mean 
 
-                rmse_per_sample = np.sqrt(np.mean((unstd_y_t - unstd_y_p) ** 2, axis=1))
-                rmst_per_sample = np.sqrt(np.mean((unstd_y_t) ** 2, axis=1))
-                mse_per_sample = np.mean((unstd_y_t - unstd_y_p) ** 2, axis=1)
-                mae_per_sample = np.mean(np.abs(unstd_y_t - unstd_y_p), axis=1)
+                window_metrics.compute_and_append(np.float128(unstd_y_t), np.float128(unstd_y_p), shot_id, window_id, f"{feature_name[0]}-{feature_name[1]}")
 
-                for sid, wid, rmse_val, mse_val, mae_val, norm in zip(
-                    shot_id, window_id, rmse_per_sample, mse_per_sample, mae_per_sample, rmst_per_sample
-                ):
-                    row = pd.DataFrame([{
-                        "shot_id": sid.item() if torch.is_tensor(sid) else sid,
-                        "window_id": wid.item() if torch.is_tensor(wid) else wid,
-                        "feature_name": f"{feature_name[0]}-{feature_name[1]}",
-                        # "global_mean": mean,
-                        # "global_std": std,
-                        "norm": norm,
-                        "RMSE": rmse_val,
-                        "MSE": mse_val,
-                        "MAE": mae_val,
-                    }])
-
-                    row.to_csv(csv_path, mode="a", header=False, index=False)
-            
-            with open(csv_path, "a") as f:
-                f.flush()
-                os.fsync(f.fileno())
-
-    print(f"✅ UNSTD Evaluation done. RMSEs and MSEs saved (incrementally) to: {csv_path}")
+    print(f"💅🏼 UNSTD Evaluation done. RMSEs and MSEs saved (incrementally).")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -484,18 +460,59 @@ def cnn_sanity_vizu_per_shot(
                 unstd_y_t = y_t*std + mean
                 unstd_y_p = y_p*std + mean 
 
-                if unstd_y_t.ndim==2:
+                print('unstd_y_t.shape', unstd_y_t.shape)
+                print('unstd_y_t.ndim', unstd_y_t.ndim)
+
+                if unstd_y_t.ndim==1:
 
                     plt.figure(figsize=(10,5))
 
-                    plt.plot(unstd_y_t[:, 0], label=f"True")
-                    plt.plot(unstd_y_p[:, 0], '--', label=f"Pred")
+                    plt.plot(unstd_y_t, label=f"True")
+                    plt.plot(unstd_y_p, '--', label=f"Pred")
 
                     plt.title("True vs Predicted")
                     plt.xlabel("Sample")
                     plt.ylabel("Value")
                     plt.legend()
                     plt.grid(True)
+
+                elif unstd_y_t.ndim==2 and unstd_y_t.shape[1]==2:
+
+                    print('hey')
+
+                    plt.figure(figsize=(10,5))
+
+                    plt.plot(unstd_y_t[:, 0], label=f"True")
+                    plt.plot(unstd_y_p[:, 0], '--', label=f"Pred")
+                
+                    plt.plot(unstd_y_t[:, 1], label=f"True")
+                    plt.plot(unstd_y_p[:, 1], '--', label=f"Pred")
+
+                    plt.title("True vs Predicted")
+                    plt.xlabel("Sample")
+                    plt.ylabel("Value")
+                    plt.legend()
+                    plt.grid(True)
+                
+                elif unstd_y_t.ndim == 2 and unstd_y_t.shape[1]!=2:
+
+                    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+                    im0 = axes[0].imshow(unstd_y_t)
+                    axes[0].set_title("True")
+                    axes[0].set_xlabel("Sample")
+                    axes[0].set_ylabel("Value")
+                    plt.colorbar(im0, ax=axes[0])
+
+                    im1 = axes[1].imshow(unstd_y_p)
+                    axes[1].set_title("Predicted")
+                    axes[1].set_xlabel("Sample")
+                    axes[1].set_ylabel("Value")
+                    plt.colorbar(im1, ax=axes[1])
+
+                    plt.suptitle("True vs Predicted")
+                    plt.tight_layout()
+                    plt.show()
                 
                 elif (unstd_y_t.ndim==3 and unstd_y_t.shape[2] == 2):
                     
@@ -599,124 +616,3 @@ def cnn_sanity_vizu_per_shot(
 
     print(f"Visualization saved. Go check in: {output_dir}")
 
-
-# ----------------------------------------------------------------------------------------------------------------------
-def cnn_save_traces_per_shot(
-    test_dataloader,
-    config_task,
-    cnn_model,
-    config_cnn,
-    n_traces=10,
-    device="cuda" if torch.cuda.is_available() else "cpu",
-):
-    """
-    Save per-feature, per-shot traces from CNN predictions.
-
-    Folder structure:
-      output_dir/
-        ├── <feature_name>/
-        │     ├── <shot_id>/trace.npz
-
-    NPZ content:
-      - true:        (N_windows, 1, *spatial_shape)
-      - pred:        (N_windows, 1, *spatial_shape)
-      - window_idx:  (N_windows,)
-    """
-
-    # === Paths ===
-    output_dir = (
-        REPO_ROOT
-        + config_cnn["paths"]["data_output_directory"]
-        + config_task["task_name"]
-    )
-    best_model_path = os.path.join(output_dir, "best_model.pt")
-
-    output_root_traces = output_dir + "/traces/"
-    os.makedirs(output_root_traces, exist_ok=True)
-
-    # === Model setup ===
-    cnn_model.load_state_dict(torch.load(best_model_path, map_location=device))
-    cnn_model.to(device)
-    cnn_model.eval()
-
-    feature_names = config_task["sources_and_signals"].get("output", [])
-
-    # Container for grouping all windows of each shot per feature
-    traces = {}
-
-    saved_traces = 0
-
-    # === Save one NPZ per shot per feature ===
-    with torch.no_grad():
-        for i, (shot_id, window_id, x_test, y_test) in enumerate(test_dataloader):
-            if saved_traces >= n_traces:
-                break
-
-            # Move data to device
-            x_test = [arr.to(torch.float32).to(device) for arr in x_test]
-            y_test = [arr.to(torch.float32).to(device) for arr in y_test]
-
-            y_pred = cnn_model(*x_test)
-            if not isinstance(y_pred, (list, tuple)):
-                y_pred = [y_pred]
-
-            # Convert IDs
-            shot_ids_np = (
-                shot_id.detach().cpu().numpy()
-                if torch.is_tensor(shot_id)
-                else np.array(shot_id)
-            )
-            window_ids_np = (
-                window_id.detach().cpu().numpy()
-                if torch.is_tensor(window_id)
-                else np.array(window_id)
-            )
-
-            # Process each predicted feature
-            for i, feature_name in enumerate(feature_names):
-                print(feature_name)
-                y_t = y_test[i].detach().cpu().numpy()  # (N, 1, ...)
-                y_p = y_pred[i].detach().cpu().numpy()
-
-                for j, sid in enumerate(shot_ids_np):
-                    wid = window_ids_np[j]
-                    key = (
-                        (feature_name[0], feature_name[1], sid)
-                        if isinstance(feature_name, (list, tuple))
-                        else (feature_name, sid)
-                    )
-
-                    if key not in traces:
-                        traces[key] = {"true": [], "pred": [], "window_idx": []}
-
-                    traces[key]["true"].append(y_t[j : j + 1])
-                    traces[key]["pred"].append(y_p[j : j + 1])
-                    traces[key]["window_idx"].append(wid)
-
-            saved_traces += np.unique(shot_ids_np).size
-
-    for key, data in traces.items():
-        if len(key) == 3:
-            f_src, f_sig, sid = key
-            feature_dir_name = f"{f_src}-{f_sig}"
-        else:
-            feature_dir_name, sid = key
-
-        feature_dir = os.path.join(output_root_traces, feature_dir_name)
-        shot_dir = os.path.join(feature_dir, str(sid))
-        os.makedirs(shot_dir, exist_ok=True)
-
-        true_arr = np.concatenate(data["true"], axis=0)
-        pred_arr = np.concatenate(data["pred"], axis=0)
-        window_arr = np.array(data["window_idx"])
-
-        np.savez(
-            os.path.join(shot_dir, "trace.npz"),
-            true=true_arr,
-            pred=pred_arr,
-            window_idx=window_arr,
-        )
-
-    print(
-        f"✅ Saved {saved_traces} full-shot traces under {output_root_traces}<feature_name>/<shot_id>/trace.npz"
-    )

@@ -8,10 +8,10 @@ from torch.utils.data import DataLoader
 # -------------------------------------------------------------------
 # Repo-specific imports
 # -------------------------------------------------------------------
-# import sys 
-# print(sys.path)
-# from .globals import REPO_ROOT, TOOLS_DIR
-from globals import REPO_ROOT, TOOLS_DIR
+try:
+    from globals import REPO_ROOT
+except:
+    from .globals import REPO_ROOT
 
 from MAST_benchmark.tools.utils import get_device
 from MAST_benchmark.data_split import get_train_test_val_shots
@@ -23,16 +23,14 @@ from MAST_benchmark.data import (
     initialize_MAST_dataset, initialize_model_dataset
 )
 
-from timecnn_transform import (
-    TimeCNNTransform,
+from timecnn_transform_cutting_input import (
+    TimeCNNTransform_cutting,
 )
 
 from cnn_utils import (
-    cnn_training_collate_fn,
-    create_cnn_architecture,
+    cnn_filled_training_collate_fn,
+    create_cnn_v5_architecture,
     loop_for_cnn_training,
-    cnn_evaluation_per_shot,
-    cnn_save_traces_per_shot,
 )
 
 # Set device
@@ -51,13 +49,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--task",
         type=str,
-        default="task_1-1",
+        # default="task_1-1",
+        default="task_4-1",
         help="The name of the task available in the benchmark",
     )
     parser.add_argument(
         "--config_cnn",
         type=str,
-        default="/config_cnn_test.yaml",
+        default="/config/config_cnn_test.yaml",
         help="Path to the model YAML config file",
     )
     args, _ = parser.parse_known_args()
@@ -72,6 +71,9 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------
     # Initialize task-specific metadata
     # -------------------------------------------------------------------
+
+    # for training and validation: use stride of 0.005ms
+    config_task["stride_window"] = 0.005
 
     dict_task_metadata = get_task_metadata(
         config_task,
@@ -97,21 +99,9 @@ if __name__ == "__main__":
         remove_outliers=True,
         verbose=False
     )
-    print("len(train_MAST_dataset) is ", len(train_MAST_dataset))
-
     val_MAST_dataset = initialize_MAST_dataset( 
         config_task,
         val_shots_,
-        local_flag = local_flag,
-        use_std_scaling = True,
-        return_incomplete_shots=True,
-        remove_outliers=True,
-        verbose=False
-    )
-
-    test_MAST_dataset = initialize_MAST_dataset( 
-        config_task,
-        test_shots_,
         local_flag = local_flag,
         use_std_scaling = True,
         return_incomplete_shots=True,
@@ -125,38 +115,31 @@ if __name__ == "__main__":
 
     model_specific_transform = ComposeTransforms(
         [
-            TimeCNNTransform(dict_task_metadata),
+            TimeCNNTransform_cutting(dict_task_metadata | config_task),
         ]
     )
 
     train_dataset = initialize_model_dataset(
-        train_MAST_dataset, dict_task_metadata, config_task, model_specific_transform
+        train_MAST_dataset, dict_task_metadata, config_task, model_specific_transform, test_mode=True
     )
     train_dataloader = DataLoader(
             dataset=train_dataset,
-            collate_fn=cnn_training_collate_fn,
-            **config_cnn["dataloader_setting"]
+            collate_fn=cnn_filled_training_collate_fn,
+            **config_cnn["dataloader_setting"],
+            pin_memory=True
         )
 
     val_dataset = initialize_model_dataset(
-        val_MAST_dataset, dict_task_metadata, config_task, model_specific_transform
+        val_MAST_dataset, dict_task_metadata, config_task, model_specific_transform, test_mode=True
     )
     val_dataloader = DataLoader(
             dataset=val_dataset,
-            collate_fn=cnn_training_collate_fn,
-            **config_cnn["dataloader_setting"]
-        )
-    
-    test_dataset = initialize_model_dataset(
-        test_MAST_dataset, dict_task_metadata, config_task, model_specific_transform
-    )
-    test_dataloader = DataLoader(
-            dataset=test_dataset,
-            collate_fn=cnn_training_collate_fn,
-            **config_cnn["dataloader_setting"]
+            collate_fn=cnn_filled_training_collate_fn,
+            **config_cnn["dataloader_setting"],
+            pin_memory=True
         )
 
-    cnn_model = create_cnn_architecture(
+    cnn_model = create_cnn_v5_architecture(
         train_dataloader, **config_cnn["cnn_settings"], verbose=True
     )
 
@@ -164,30 +147,26 @@ if __name__ == "__main__":
     # Training loop
     # -------------------------------------------------------------------
 
+    base = config_cnn["paths"]["data_output_directory"]
+
+    print(config_cnn)
+
     base_model_dir = (
         REPO_ROOT
-        + config_cnn["paths"]["data_output_directory"]
-        + config_task["task_name"]
-        + "/"
+        + base
+        + f"/{config_task['task_name']}"
+        + "/model_v5_filled_cutting_input/"
     )
-    model_dir = base_model_dir
+    
     counter = 1
+    model_dir = base_model_dir.rstrip("/") + f"/run_{counter}/"
     # If folder exists → create new version
-    while os.path.exists(model_dir):
-        model_dir = base_model_dir.rstrip("/") + f"run_{counter}/"
-        counter += 1
+    # while os.path.exists(model_dir):
+    #     counter += 1
+    #     model_dir = base_model_dir.rstrip("/") + f"/run_{counter}/"
     # Create directory
     os.makedirs(model_dir, exist_ok=True)
     # print(f"Saving model to: {model_dir}")
-
-    best_model_state, early_stop = loop_for_cnn_training(
-        base_cnn_model=cnn_model,
-        train_dataloader=train_dataloader,
-        val_dataloader=val_dataloader,
-        **config_cnn["training_args"],
-        output_dir=model_dir,
-        verbose=True,
-    )
 
     best_model_state, early_stop = loop_for_cnn_training(
         base_cnn_model=cnn_model,
@@ -202,8 +181,10 @@ if __name__ == "__main__":
     # Evaluation loop
     # -------------------------------------------------------------------
 
-    cnn_evaluation_per_shot(test_dataloader, config_task, cnn_model, config_cnn)
+    # cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, model_dir)
 
-    cnn_save_traces_per_shot(
-        test_dataloader, config_task, cnn_model, config_cnn, n_traces=10
-    )
+    # cnn_save_traces_per_shot(
+    #     test_dataloader, config_task, cnn_model, config_cnn, n_traces=10
+    # )
+
+
