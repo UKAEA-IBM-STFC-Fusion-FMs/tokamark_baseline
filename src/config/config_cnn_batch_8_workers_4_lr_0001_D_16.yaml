@@ -1,0 +1,18 @@
+subset_of_shots: 
+local: true
+
+cnn_settings:
+  D: 16
+
+dataloader_setting:
+  batch_size: 8
+  num_workers: 4
+  shuffle: True
+
+training_args:
+  lr: 0.0001
+  max_epochs: 500
+  patience: 16
+
+paths:
+  data_output_directory: /output_NEW/cnn_model
