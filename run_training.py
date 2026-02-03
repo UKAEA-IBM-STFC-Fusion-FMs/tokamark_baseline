@@ -1,4 +1,3 @@
-import os
 import argparse
 import yaml
 from multiprocessing import cpu_count

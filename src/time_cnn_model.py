@@ -624,7 +624,6 @@ class MultiBranchTimeCNNModel(nn.Module):
 
 
 # ======================================================================================================================
-import torch
 from torchinfo import summary
 
 D = 8

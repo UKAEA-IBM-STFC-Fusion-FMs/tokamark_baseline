@@ -105,7 +105,7 @@ def cnn_unstd_evaluation_per_shot(
 
                 window_metrics.compute_and_append(np.float128(unstd_y_t), np.float128(unstd_y_p), shot_id, window_id, f"{feature_name[0]}-{feature_name[1]}")
 
-    print(f"💅🏼 UNSTD Evaluation done. RMSEs and MSEs saved (incrementally).")
+    print("💅🏼 UNSTD Evaluation done. RMSEs and MSEs saved (incrementally).")
 
 # ----------------------------------------------------------------------------------------------------------------------
 # CNN SANITY VISUALIZATION LOOP
@@ -206,8 +206,8 @@ def cnn_sanity_vizu_per_shot(
 
                     plt.figure(figsize=(10,5))
 
-                    plt.plot(unstd_y_t, label=f"True")
-                    plt.plot(unstd_y_p, '--', label=f"Pred")
+                    plt.plot(unstd_y_t, label="True")
+                    plt.plot(unstd_y_p, '--', label="Pred")
 
                     plt.title("True vs Predicted")
                     plt.xlabel("Sample")
@@ -221,11 +221,11 @@ def cnn_sanity_vizu_per_shot(
 
                     plt.figure(figsize=(10,5))
 
-                    plt.plot(unstd_y_t[:, 0], label=f"True")
-                    plt.plot(unstd_y_p[:, 0], '--', label=f"Pred")
+                    plt.plot(unstd_y_t[:, 0], label="True")
+                    plt.plot(unstd_y_p[:, 0], '--', label="Pred")
                 
-                    plt.plot(unstd_y_t[:, 1], label=f"True")
-                    plt.plot(unstd_y_p[:, 1], '--', label=f"Pred")
+                    plt.plot(unstd_y_t[:, 1], label="True")
+                    plt.plot(unstd_y_p[:, 1], '--', label="Pred")
 
                     plt.title("True vs Predicted")
                     plt.xlabel("Sample")
