@@ -12,7 +12,7 @@ dataloader_setting:
 training_args:
   lr: 0.0001
   max_epochs: 500
-  patience: 16
+  patience: 10
 
 paths:
   data_output_directory: /output/cnn_model

@@ -571,7 +571,7 @@ class MultiBranchTimeCNNModel(nn.Module):
                 branch = Conv1DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
             elif var_shape == (1, 2):
                 # Flatten first if needed, like 1D input
-                print('x_point exception')
+                # print('x_point exception')
                 branch = nn.Sequential(
                     nn.Flatten(),              # (1, 2) -> (2,)
                     nn.Linear(D, 2*D),         # same structure as 0D branch
@@ -626,7 +626,7 @@ class MultiBranchTimeCNNModel(nn.Module):
 # ======================================================================================================================
 from torchinfo import summary
 
-D = 8
+D = 16
 B = 6
 
 tasks = {
@@ -729,45 +729,45 @@ tasks = {
 }
 
 
-# results = {}
+results = {}
 
-# for name, cfg in tasks.items():
+for name, cfg in tasks.items():
 
-#     model = MultiBranchTimeCNNModel(cfg["input"], cfg["output"], D)
+    model = MultiBranchTimeCNNModel(cfg["input"], cfg["output"], D)
 
-#     # dummy input
-#     dummy_input = [torch.randn((B,)+s) for s in cfg["input"]]
+    # dummy input
+    dummy_input = [torch.randn((B,)+s) for s in cfg["input"]]
 
-#     # get actual output shapes
-#     with torch.no_grad():
-#         actual_outputs = model(*dummy_input)
-#         actual_shapes = [tuple(o.shape) for o in actual_outputs]
+    # get actual output shapes
+    with torch.no_grad():
+        actual_outputs = model(*dummy_input)
+        actual_shapes = [tuple(o.shape) for o in actual_outputs]
 
-#     # torchinfo summary
-#     shape_input = [(B,)+s for s in cfg["input"]]
-#     s = summary(model, input_size=(shape_input), verbose=0)
-#     print(s)
+    # torchinfo summary
+    shape_input = [(B,)+s for s in cfg["input"]]
+    s = summary(model, input_size=(shape_input), verbose=0)
+    print(s)
     
-#     results[name] = {
-#         "total_params": s.total_params,
-#         "trainable_params": s.trainable_params,
-#         "non_trainable_params": s.total_params - s.trainable_params,
-#         "actual_output_shapes": actual_shapes,
-#         "demanded_output_shapes": cfg["output"]
-#     }
+    results[name] = {
+        "total_params": s.total_params,
+        "trainable_params": s.trainable_params,
+        "non_trainable_params": s.total_params - s.trainable_params,
+        "actual_output_shapes": actual_shapes,
+        "demanded_output_shapes": cfg["output"]
+    }
 
-# # # print RESULTS
-# for k,v in results.items():
-#     print(f"\nTASK {k}")
-#     print(f"Total params: {v['total_params']:,}")
-#     print(f"Trainable params: {v['trainable_params']:,}")
-#     print(f"Non-trainable params: {v['non_trainable_params']:,}")
-#     print("Actual output shapes:")
-#     for shp in v['actual_output_shapes']:
-#         print("   ", shp)
-#     print("Demanded output shapes:")
-#     for shp in v['demanded_output_shapes']:
-#         print("   ", shp)
+# # print RESULTS
+for k,v in results.items():
+    print(f"\nTASK {k}")
+    print(f"Total params: {v['total_params']:,}")
+    print(f"Trainable params: {v['trainable_params']:,}")
+    print(f"Non-trainable params: {v['non_trainable_params']:,}")
+    print("Actual output shapes:")
+    for shp in v['actual_output_shapes']:
+        print("   ", shp)
+    print("Demanded output shapes:")
+    for shp in v['demanded_output_shapes']:
+        print("   ", shp)
 
 
 

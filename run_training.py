@@ -1,5 +1,6 @@
 import argparse
 import yaml
+import torch
 from multiprocessing import cpu_count
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
@@ -8,6 +9,8 @@ try:
     from globals import REPO_ROOT
 except:
     from .globals import REPO_ROOT
+
+from utils import set_seed, seed_worker
 
 from MAST_benchmark.tools.utils import get_device
 from MAST_benchmark.data_split import get_train_test_val_shots
@@ -36,6 +39,10 @@ device = get_device()
 
 
 if __name__ == "__main__":
+
+    SEED = 42
+    set_seed(SEED)
+
     print(f"Number of available CPU cores: {cpu_count()}\n")
     mp.set_start_method("spawn", force=True)
 
@@ -120,12 +127,17 @@ if __name__ == "__main__":
         ]
     )
 
+    g = torch.Generator()
+    g.manual_seed(SEED)
+
     train_dataset = initialize_model_dataset(
         train_MAST_dataset, dict_task_metadata, config_task, model_specific_transform, test_mode=True
     )
     train_dataloader = DataLoader(
             dataset=train_dataset,
             collate_fn=cnn_collate_fn,
+            worker_init_fn=seed_worker,
+            generator=g,
             **config_cnn["dataloader_setting"],
             pin_memory=True
         )
@@ -136,6 +148,8 @@ if __name__ == "__main__":
     val_dataloader = DataLoader(
             dataset=val_dataset,
             collate_fn=cnn_collate_fn,
+            worker_init_fn=seed_worker,
+            generator=g,
             **config_cnn["dataloader_setting"],
             pin_memory=True
         )
