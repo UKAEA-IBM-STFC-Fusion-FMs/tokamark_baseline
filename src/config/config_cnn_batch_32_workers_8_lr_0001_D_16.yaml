@@ -15,4 +15,4 @@ training_args:
   patience: 16
 
 paths:
-  data_output_directory: /output_NEW/cnn_model
+  data_output_directory: /output/cnn_model

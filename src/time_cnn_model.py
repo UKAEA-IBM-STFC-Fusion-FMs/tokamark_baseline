@@ -1,8 +1,12 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
-import numpy as np
+# Set device
+from MAST_benchmark.tools.utils import get_device
+device = get_device()
+# print(f"Using device: {device}\n")
 
 
 padding = 1
@@ -11,13 +15,43 @@ stride = 3
 layers_encoder = 3
 layers_decoder = 3
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+def create_cnn_architecture(dataloader_, D, verbose=False):
+    if verbose:
+        print("\n\n----------CNN MODEL INITIALIZATION----------\n")
+
+    for l in range(len(dataloader_.dataset)):
+        try:
+            windows_gen = dataloader_.dataset[l]  # this is a generator
+            first_window = next(windows_gen) 
+            input_shapes = [arr.shape for arr in first_window["x"]]
+            output_shape = [arr.shape for arr in first_window["y"]]
+
+            if verbose:
+                print(f"Shot {dataloader_.dataset.get_shot_id(l)} used as reference")
+                print(f"Input shapes are: {input_shapes}")
+                print(f"Output shape are: {output_shape}")
+
+            break  # stop after first successful shot
+
+        except Exception as e:
+            print(
+                f"Skipping {dataloader_.dataset.get_shot_id(l)} because shot not trainable: {e}"
+            )
+            continue
+
+    cnn_model = MultiBranchTimeCNNModel(input_shapes, output_shape, D).to(device)
+
+    input_size = [ (2,) + shape for shape in input_shapes ]
+    summary(cnn_model, input_size=input_size)
+
+    return cnn_model
+
 def compute_compressed_size_encoder(L, layers, kernel_size, stride, padding):
     for _ in range(layers):
-        # Conv1D
         L = (L + 2*padding - kernel_size) // stride + 1
-        # MaxPool1D (kernel=2, stride=2)
         L = (L + 2*padding - 2) // 2 + 1
-
     return L
 
 def compute_list_compressed_size_decoder(L_out, layers, kernel_size, stride, padding, output_padding=0):
@@ -26,31 +60,18 @@ def compute_list_compressed_size_decoder(L_out, layers, kernel_size, stride, pad
     list_L = [L]
 
     for _ in range(layers):
-        
-        # L = (L + 2*padding - kernel_size + output_padding) / stride + 1 
         L = (L + 2*padding - kernel_size + output_padding) // stride + 1 
-        # print(L)
         L = int( np.ceil( L ) )
-        # print("to ", L)
-        # print('leading to out shape ', (L-1)*stride - 2*padding + kernel_size - output_padding)
-
         list_L.append(L)
-        # print(list_L[::-1])
-    
-    # for l in list_L[::-1]:
-        # print((l-1)*stride - 2*padding + kernel_size)
-
     return list_L[::-1]
-
-
 
 
 # ======================================================================================================================
 class Conv1DEncoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, input_shape, D, layers=2,
-                 kernel_size=3, stride=2, padding=1):
+    def __init__(self, input_shape, D, layers,
+                 kernel_size, stride, padding):
         super().__init__()
 
         self.D = D
@@ -200,10 +221,10 @@ class Conv2DEncoder(nn.Module):
         self.height_var = input_shape[2]
 
         self.ts_comp = compute_compressed_size_encoder(
-            self.ts_var, layers, kernel_size[0], stride[0], padding
+            self.ts_var, layers, kernel_size, stride, padding
         )
         self.height_comp = compute_compressed_size_encoder(
-            self.height_var, layers, kernel_size[1], stride[1], padding
+            self.height_var, layers, kernel_size, stride, padding
         )
 
         # # print('ts_comp', self.ts_comp)
@@ -259,8 +280,8 @@ class Conv2DEncoder(nn.Module):
 
 # ======================================================================================================================
 class Conv2DDecoder(nn.Module):
-    def __init__(self, output_shape, D, layers=2,
-                 kernel_size=3, stride=2, padding=1, output_padding=1):
+    def __init__(self, output_shape, D, layers,
+                 kernel_size, stride, padding, output_padding=1):
         super().__init__()
 
         self.D = D
@@ -270,11 +291,11 @@ class Conv2DDecoder(nn.Module):
         self.height_var = output_shape[2]
 
         self.list_ts_comp = compute_list_compressed_size_decoder(
-            self.ts_var, layers, kernel_size[0], stride[0], padding, output_padding
+            self.ts_var, layers, kernel_size, stride, padding, output_padding
         )
 
         self.list_height_comp = compute_list_compressed_size_decoder(
-            self.height_var, layers, kernel_size[1], stride[1], padding, output_padding
+            self.height_var, layers, kernel_size, stride, padding, output_padding
         )
 
         # print('ts_comp', self.ts_comp)
@@ -341,8 +362,8 @@ class Conv2DDecoder(nn.Module):
 class Conv3DEncoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, input_shape, D, layers=2,
-                 kernel_size=3, stride=2, padding=1):
+    def __init__(self, input_shape, D, layers,
+                 kernel_size, stride, padding):
         super().__init__()
 
         self.D = D
@@ -418,8 +439,8 @@ class Conv3DEncoder(nn.Module):
 class Conv3DDecoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, output_shape, D, layers=2,
-                 kernel_size=3, stride=2, padding=1, output_padding=1):
+    def __init__(self, output_shape, D, layers,
+                 kernel_size, stride, padding, output_padding=1):
         super().__init__()
 
         self.D = D
@@ -507,7 +528,7 @@ class Conv3DDecoder(nn.Module):
         return x
 
 # ======================================================================================================================
-class MultiBranchTimeCNNModel_v5(nn.Module):
+class MultiBranchTimeCNNModel(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, input_shapes, output_shapes, D=16):
@@ -521,7 +542,7 @@ class MultiBranchTimeCNNModel_v5(nn.Module):
             if len(shape) == 4:  # e.g., (2, T, 15, 17) images evolving in time
                 branch = Conv3DEncoder(shape, D, layers_encoder, kernel_size, stride, padding)
             elif len(shape) == 3:  # e.g., (1, T, 15) profiles evolving in time
-                branch = Conv2DEncoder(shape, D, layers_encoder, [kernel_size, kernel_size], [stride, stride], padding)
+                branch = Conv2DEncoder(shape, D, layers_encoder, kernel_size, stride, padding)
             elif len(shape) == 2:  # e.g., (7, T, ) time series evolving in time
                 branch = Conv1DEncoder(shape, D, layers_encoder, kernel_size, stride, padding)
             else:
@@ -545,7 +566,7 @@ class MultiBranchTimeCNNModel_v5(nn.Module):
             if len(var_shape) == 4:
                 branch = Conv3DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
             elif len(var_shape) == 3:
-                branch = Conv2DDecoder(var_shape, D, layers_decoder, [kernel_size, kernel_size] , [stride, stride], padding)
+                branch = Conv2DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
             elif len(var_shape) == 2 and var_shape != (1, 2):
                 branch = Conv1DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
             elif var_shape == (1, 2):
@@ -602,148 +623,7 @@ class MultiBranchTimeCNNModel_v5(nn.Module):
         return decoded_representation
 
 
-
-    # def forward(self, *inputs):
-    #     branch_outputs = []
-
-    #     for branch, x in zip(self.input_branches, inputs):
-    #         # print(f"\n Encoder of {x.shape}")
-    #         out = branch(x)
-    #         branch_outputs.append(out)
-        
-    #     # print('\nCommon Layer to flatten time')     
-    #     merged = torch.cat(branch_outputs, dim=1)
-    #     # print(merged.shape)        
-    #     merged = self.backbone(merged)
-    #     # print('after backbone', merged.shape)   
-
-    #     decoded_representation = []
-
-    #     for branch in self.output_branches :
-    #         # print("\n ")
-    #         out = branch(merged)
-    #         decoded_representation.append(out)
-        
-    #     return decoded_representation 
-
-
-    # ------------------------------------------------------------------------------------------------------------------
-
-
-
 # ======================================================================================================================
-# Example usage
-# batch_size = 8
-
-# D = 16
-# T = 100
-
-# input_channels_1 = 1  # Number of input channels
-
-# input_channels_2 = 1  
-# height_length_2 = 54
-
-# input_channels_3 = 1  # Number of input channels
-# height_length_3 = 27
-# width_length_3 = 33
-
-# output_shape = [[7]]
-
-# x_init = [ torch.randn(input_channels_1, T), # time series evolving in time
-#       torch.randn(input_channels_2, T*2, height_length_2), # profiles evolving in time
-#       torch.randn(input_channels_3, T+10, height_length_3, width_length_3) # images evolving in time
-#       ]
-
-# model = MultiBranchTimeCNNModel([arr.shape for arr in x_init], output_shape, D)
-
-# x = [ torch.randn(batch_size, input_channels_1, T), # time series evolving in time
-#       torch.randn(batch_size, input_channels_2, T*2, height_length_2), # profiles evolving in time
-#       torch.randn(batch_size, input_channels_3, T+10, height_length_3, width_length_3) # images evolving in time
-# ]
-
-# output = model(x)
-
-# ======================================================================================================================
-# Example usage
-
-# D = 16
-# B = 2
-
-# task 1-1
-# input_shapes = [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18), (1, 250, 12), (1, 20, 10), (1, 20), (1, 20)]
-# output_shapes = [(1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1)]
-
-# # task 1-2
-# input_shapes: [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18), (1, 250, 12), (1, 20, 10), (1, 20), (1, 20)]
-# output_shape: [(1, 1, 170), (1, 1, 170)]
-
-# # task 1-3
-# input_shapes: [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18), (1, 250, 12), (1, 20, 10), (1, 20), (1, 20)]
-# output_shape: [(1, 1, 65, 65)]
-
-# # task 2-1
-# input_shapes: [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18), (1, 250, 12), (1, 20, 10), (1, 20), (1, 20), (1, 120, 4), (1, 120)]
-# output_shape: [(1, 100, 10), (1, 100), (1, 100), (1, 5), (1, 5), (1, 5), (1, 5), (1, 5, 2), (1, 5, 2), (1, 5), (1, 5), (1, 5), (1, 5), (1, 5), (1, 5), (1, 5), (1, 5), (1, 5)]
-
-# # task 2-2
-# input_shapes: [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18), (1, 250, 12), (1, 20, 10), (1, 20), (1, 20), (1, 120, 4), (1, 120)]
-# output_shape: [(1, 5, 170), (1, 5, 170)]
-
-# # task 2-2
-# input_shapes: [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18), (1, 250, 12), (1, 20, 10), (1, 20), (1, 20), (1, 120, 4), (1, 120)]
-# output_shape: [(1, 5, 65, 65)]
-
-# # task 3-1
-# input_shapes: [(1, 1, 120), (1, 1, 120), (1, 220), (1, 220), (1, 220), (1, 220)]
-# output_shape: [(1, 10, 120), (1, 10, 120)]
-
-# # task 3-2
-# input_shapes: [(1, 1, 120), (1, 1, 120), (1, 250, 3), (1, 250, 18), (1, 250, 18), (1, 220), (1, 220), (1, 220), (1, 220)]
-# output_shape: [(1, 2500, 3), (1, 2500, 18), (1, 2500, 18)]
-
-# # task 3-3
-# input_shapes: [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18), (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600), (1, 620), (1, 620), (1, 620), (1, 620)]
-# output_shape: [(1, 1, 120), (1, 1, 120), (1, 1), (1, 1), (1, 1)]
-
-# task 4-1
-# input_shapes = [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18), (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600), (1, 7500, 3), (1, 7500, 18), (1, 7500, 18), (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000), (1, 1000), (1, 1000)]
-# output_shapes = [(1, 5000, 18), (1, 5000, 18)]
-
-# task 4-2
-# input_shapes = [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18), (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600), (1, 7500, 3), (1, 7500, 18), (1, 7500, 18), (1, 75000, 3), (1, 75000, 3), (1, 30, 120), (1, 30, 120), (1, 1000), (1, 1000), (1, 1000), (1, 1000)]
-# output_shapes = [(1, 5000, 18), (1, 5000, 18)]
-
-# task 4-3
-# input_shapes = [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18), (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600), (1, 7500, 3), (1, 7500, 18), (1, 7500, 18), (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000), (1, 1000), (1, 1000)]
-# output_shapes = [(1, 20)]
-
-# task 4-4
-# input_shapes = [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18), (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600), (1, 7500, 3), (1, 7500, 18), (1, 7500, 18), (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000), (1, 1000), (1, 1000)]
-# output_shapes = [(1, 400)]
-
-# task 4-5
-# input_shapes = [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18), (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600), (1, 7500, 3), (1, 7500, 18), (1, 7500, 18), (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000), (1, 1000), (1, 1000)]
-# # input_shapes = [(1, 750, 15), (1, 750, 40)]
-# output_shapes = [(1, 50000, 3), (1, 50000, 3)]
-
-# model = MultiBranchTimeCNNModel(input_shapes, output_shapes, D)
-
-# input = ([torch.randn((B,) + shape) for shape in input_shapes])
-# output_wanted = ([torch.randn((B,) + shape) for shape in output_shapes])
-
-# from torchinfo import summary
-
-# shape_input = ([(B,) + shape for shape in input_shapes])
-# summary(model, input_size=(shape_input))
-
-# # print( "\nOUTPUT SHAPES: ", [ arr.shape for arr in model(*input) ] )
-# # print( "\nOUTPUT SHAPES WANTED: ", [ arr.shape for arr in output_wanted ] )
-
-
-
-
-
-
 import torch
 from torchinfo import summary
 
@@ -758,23 +638,16 @@ tasks = {
                 (1,), (1,), (1,), (1,), (1,), (1,), 
                 (1,), (1,), (1,)]
     },
-# #     "1-1": {
-# #         "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
-# #                 (1, 250, 12), (1, 20, 10), (1, 20), (1, 20)],
-# #         "output": [(1, 1), (1, 1), (1, 1), (1, 1), (1, 1, 2), (1, 1, 2),
-# #                 (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), 
-# #                 (1, 1), (1, 1), (1, 1)]
-# #     },
-#     "1-2": {
-#         "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
-#                   (1, 250, 12), (1, 20, 10), (1, 20), (1, 20)],
-#         "output": [(1, 1, 170), (1, 1, 170)]
-#     },
-#     "1-3": {
-#         "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
-#                   (1, 250, 12), (1, 20, 10), (1, 20), (1, 20)],
-#         "output": [(1, 1, 65, 65)]
-#     },
+    "1-2": {
+        "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
+                  (1, 250, 12), (1, 20, 10), (1, 20), (1, 20)],
+        "output": [(1, 1, 170), (1, 1, 170)]
+    },
+    "1-3": {
+        "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
+                  (1, 250, 12), (1, 20, 10), (1, 20), (1, 20)],
+        "output": [(1, 1, 65, 65)]
+    },
     "2-1": {
         "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
                   (1, 250, 12), (1, 20, 10), (1, 20), (1, 20),
@@ -784,78 +657,76 @@ tasks = {
                    (1, 5), (1, 5), (1, 5), (1, 5), (1, 5), (1, 5), 
                    (1, 5), (1, 5)]
     },
-#     "2-2": {
-#         "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
-#                   (1, 250, 12), (1, 20, 10), (1, 20), (1, 20),
-#                   (1, 120, 4), (1, 120)],
-#         "output": [(1, 5, 170), (1, 5, 170)]
-#     },
-#     "2-3": {
-#         "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
-#                   (1, 250, 12), (1, 20, 10), (1, 20), (1, 20),
-#                   (1, 120, 4), (1, 120)],
-#         "output": [(1, 5, 65, 65)]
-#     },
-#     "3-1": {
-#         "input": [(1, 1, 120), (1, 1, 120), (1, 220), (1, 220),
-#                   (1, 220), (1, 220)],
-#         "output": [(1, 10, 120), (1, 10, 120)]
-#     },
-#     "3-2": {
-#         "input": [(1, 1, 120), (1, 1, 120), (1, 250, 3), (1, 250, 18),
-#                   (1, 250, 18), (1, 220), (1, 220), (1, 220), (1, 220)],
-#         "output": [(1, 2500, 3), (1, 2500, 18), (1, 2500, 18)]
-#     },
-#     "3-3": {
-#         "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
-#                   (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
-#                   (1, 620), (1, 620), (1, 620), (1, 620)],
-#         "output": [(1, 1, 120), (1, 1, 120), (1, 1), (1, 1), (1, 1)]
-#     },
-#     "4-1": {
-#         "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
-#                   (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
-#                   (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
-#                   (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000),
-#                   (1, 1000), (1, 1000)],
-#         "output": [(1, 5000, 18), (1, 5000, 18)]
-#         # "output": [(2, 5000, 18)]
+    "2-2": {
+        "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
+                  (1, 250, 12), (1, 20, 10), (1, 20), (1, 20),
+                  (1, 120, 4), (1, 120)],
+        "output": [(1, 5, 170), (1, 5, 170)]
+    },
+    "2-3": {
+        "input": [(1, 25, 15), (1, 25, 40), (1, 25, 18), (1, 25, 18),
+                  (1, 250, 12), (1, 20, 10), (1, 20), (1, 20),
+                  (1, 120, 4), (1, 120)],
+        "output": [(1, 5, 65, 65)]
+    },
+    "3-1": {
+        "input": [(1, 1, 120), (1, 1, 120), (1, 220), (1, 220),
+                  (1, 220), (1, 220)],
+        "output": [(1, 10, 120), (1, 10, 120)]
+    },
+    "3-2": {
+        "input": [(1, 1, 120), (1, 1, 120), (1, 250, 3), (1, 250, 18),
+                  (1, 250, 18), (1, 220), (1, 220), (1, 220), (1, 220)],
+        "output": [(1, 2500, 3), (1, 2500, 18), (1, 2500, 18)]
+    },
+    "3-3": {
+        "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
+                  (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
+                  (1, 620), (1, 620), (1, 620), (1, 620)],
+        "output": [(1, 1, 120), (1, 1, 120), (1, 1), (1, 1), (1, 1)]
+    },
+    "4-1": {
+        "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
+                  (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
+                  (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
+                  (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000),
+                  (1, 1000), (1, 1000)],
+        "output": [(1, 5000, 18), (1, 5000, 18)]
 
-#     },
-#     "4-2": {
-#         "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
-#                   (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
-#                   (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
-#                   (1, 75000, 3), (1, 75000, 3), (1, 30, 120), (1, 30, 120),
-#                   (1, 1000), (1, 1000), (1, 1000), (1, 1000)],
-#         "output": [(1, 5000, 18), (1, 5000, 18)]
-#         # "output": [(2, 5000, 18)]
-#     },
-#     "4-3": {
-#         "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
-#                   (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
-#                   (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
-#                   (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000),
-#                   (1, 1000), (1, 1000)],
-#         "output": [(1, 20)]
-#     },
-#     "4-4": {
-#         "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
-#                   (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
-#                   (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
-#                   (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000),
-#                   (1, 1000), (1, 1000)],
-#         "output": [(1, 400)]
-#     },
-#     "4-5": {
-#         "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
-#                   (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
-#                   (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
-#                   (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000),
-#                   (1, 1000), (1, 1000)],
-#         "output": [(1, 50000, 3), (1, 50000, 3)]
+    },
+    "4-2": {
+        "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
+                  (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
+                  (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
+                  (1, 75000, 3), (1, 75000, 3), (1, 30, 120), (1, 30, 120),
+                  (1, 1000), (1, 1000), (1, 1000), (1, 1000)],
+        "output": [(1, 5000, 18), (1, 5000, 18)]
+    },
+    "4-3": {
+        "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
+                  (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
+                  (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
+                  (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000),
+                  (1, 1000), (1, 1000)],
+        "output": [(1, 20)]
+    },
+    "4-4": {
+        "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
+                  (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
+                  (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
+                  (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000),
+                  (1, 1000), (1, 1000)],
+        "output": [(1, 400)]
+    },
+    "4-5": {
+        "input": [(1, 750, 15), (1, 750, 40), (1, 750, 18), (1, 750, 18),
+                  (1, 7500, 12), (1, 600, 10), (1, 600), (1, 600), (1, 600),
+                  (1, 7500, 3), (1, 7500, 18), (1, 7500, 18),
+                  (1, 75000, 3), (1, 75000, 3), (1, 1000), (1, 1000),
+                  (1, 1000), (1, 1000)],
+        "output": [(1, 50000, 3), (1, 50000, 3)]
 
-#     }
+    }
 }
 
 
@@ -863,7 +734,7 @@ tasks = {
 
 # for name, cfg in tasks.items():
 
-#     model = MultiBranchTimeCNNModel_v5(cfg["input"], cfg["output"], D)
+#     model = MultiBranchTimeCNNModel(cfg["input"], cfg["output"], D)
 
 #     # dummy input
 #     dummy_input = [torch.randn((B,)+s) for s in cfg["input"]]

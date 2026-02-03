@@ -2,7 +2,7 @@ from typing import Dict, Any
 import numpy as np
 
 # ======================================================================================================================
-class TimeCNNTransform_cutting:
+class TimeCNNTransform:
 
     def __init__(self, dict_metadata, verbose=False):
         # dictionary that persists across calls

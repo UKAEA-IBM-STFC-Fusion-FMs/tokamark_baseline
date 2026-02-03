@@ -8,9 +8,6 @@ from torch.utils.data import DataLoader
 # -------------------------------------------------------------------
 # Repo-specific imports
 # -------------------------------------------------------------------
-# import sys 
-# print(sys.path)
-# from .globals import REPO_ROOT, TOOLS_DIR
 try:
     from globals import REPO_ROOT
 except:
@@ -26,17 +23,28 @@ from MAST_benchmark.data import (
     initialize_MAST_dataset, initialize_model_dataset
 )
 
-from MAST_benchmark.evaluator import WindowMetricsWriter, compute_task_metrics, compute_all_metrics
-
-
-from timecnn_transform_cutting_input import (
-    TimeCNNTransform_cutting,
+from MAST_benchmark.evaluator import (
+    WindowMetricsWriter, 
+    compute_task_metrics, 
+    compute_all_metrics
 )
 
-from cnn_utils import (
-    cnn_filled_training_collate_fn,
-    create_cnn_v5_architecture,
-    NEW_cnn_unstd_evaluation_per_shot,
+
+from src.time_cnn_model import (
+    create_cnn_architecture
+)
+
+from src.time_cnn_transform import (
+    TimeCNNTransform,
+)
+
+from src.trainer import (
+    cnn_collate_fn,
+)
+
+from src.evaluator import (
+    cnn_sanity_vizu_per_shot,
+    cnn_unstd_evaluation_per_shot,
 )
 
 
@@ -48,9 +56,9 @@ if __name__ == "__main__":
     print(f"Number of available CPU cores: {cpu_count()}\n")
     mp.set_start_method("spawn", force=True)
 
-    # -------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
     # Argument parsing
-    # -------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--task",
@@ -72,19 +80,19 @@ if __name__ == "__main__":
     # Load CNN YAML config
     with open(REPO_ROOT + args.config_cnn, "r") as f:
         config_cnn = yaml.safe_load(f)
-
-    # -------------------------------------------------------------------
+    
+    # ------------------------------------------------------------------------------------------------------------------
     # Initialize task-specific metadata
-    # -------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
 
     dict_task_metadata = get_task_metadata(
         config_task,
         verbose=False
     )
 
-    # -------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
     # Initialize MAST datasets
-    # -------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
 
     train_shots_, test_shots_, val_shots_ = get_train_test_val_shots(
         max_index=config_cnn["subset_of_shots"]
@@ -102,13 +110,13 @@ if __name__ == "__main__":
         verbose=False
     )
 
-    # -------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
     # CNN pipeline
-    # -------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
 
     model_specific_transform = ComposeTransforms(
         [
-            TimeCNNTransform_cutting(dict_task_metadata | config_task),
+            TimeCNNTransform(dict_task_metadata | config_task),
         ]
     )
     
@@ -117,19 +125,18 @@ if __name__ == "__main__":
     )
     test_dataloader = DataLoader(
             dataset=test_dataset,
-            collate_fn=cnn_filled_training_collate_fn,
+            collate_fn=cnn_collate_fn,
             **config_cnn["dataloader_setting"],
             pin_memory=True
         )    
     test_dataloader_vizu = DataLoader(
             dataset=test_dataset,
-            collate_fn=cnn_filled_training_collate_fn,
-            # **config_cnn["dataloader_setting"]
+            collate_fn=cnn_collate_fn,
             batch_size = 1,
             num_workers = 0,
         )
 
-    cnn_model = create_cnn_v5_architecture(
+    cnn_model = create_cnn_architecture(
         test_dataloader_vizu, **config_cnn["cnn_settings"], verbose=True
     )
 
@@ -137,7 +144,8 @@ if __name__ == "__main__":
     # Training loop
     # -------------------------------------------------------------------
 
-    base = config_cnn["paths"]["data_output_directory"]
+    # base = config_cnn["paths"]["data_output_directory"]
+    base = "/output_NEW_v1/cnn_model"
 
     print(config_cnn)
 
@@ -145,7 +153,8 @@ if __name__ == "__main__":
         REPO_ROOT
         + base
         + f"/{config_task['task_name']}"
-        + "/model_v5_filled_cutting_input/"
+        # + "/model_v5_filled_cutting_input/"
+        + "/model_v5_filled/"
     )
     
     counter = 1
@@ -155,12 +164,12 @@ if __name__ == "__main__":
     # Evaluation
     # -------------------------------------------------------------------
 
-    # cnn_sanity_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, model_dir, n_shot_to_plot=3)
+    cnn_sanity_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, model_dir, n_shot_to_plot=3)
 
-    results_dir = REPO_ROOT + "/results_NEW"
-    # print(results_dir)
-    # window_metrics = WindowMetricsWriter(args.task, results_dir)
-    # NEW_cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, model_dir, window_metrics)
-    # compute_task_metrics(args.task, results_dir)
+    results_dir = REPO_ROOT + "/results_NEW_v1_updated"
+    print(results_dir)
+    window_metrics = WindowMetricsWriter(args.task, results_dir)
+    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, model_dir, window_metrics)
+    compute_task_metrics(args.task, results_dir)
 
-    compute_all_metrics(output_dir=results_dir, save_locally=True)
+    # compute_all_metrics(output_dir=results_dir, save_locally=True)
