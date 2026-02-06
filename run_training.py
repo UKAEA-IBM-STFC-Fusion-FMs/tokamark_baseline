@@ -40,9 +40,6 @@ device = get_device()
 
 if __name__ == "__main__":
 
-    SEED = 42
-    set_seed(SEED)
-
     print(f"Number of available CPU cores: {cpu_count()}\n")
     mp.set_start_method("spawn", force=True)
 
@@ -62,6 +59,12 @@ if __name__ == "__main__":
         default="/src/config/config_cnn_batch_32_workers_16_lr_0001_D_16.yaml",
         help="Path to the model YAML config file",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42, #200399 or 140801
+        help="Path to the model YAML config file",
+    )
     args, _ = parser.parse_known_args()
 
     # Load Task YAML config
@@ -71,6 +74,10 @@ if __name__ == "__main__":
     with open(REPO_ROOT + args.config_cnn, "r") as f:
         config_cnn = yaml.safe_load(f)
     print(config_cnn)
+
+    SEED = args.seed
+    set_seed(SEED)
+    print(SEED)
 
     # ------------------------------------------------------------------------------------------------------------------
     # Initialize task-specific metadata
@@ -167,7 +174,7 @@ if __name__ == "__main__":
     base_model_dir = (
         REPO_ROOT
         + base
-        + f"/{config_task['task_name']}/"
+        + f"/{config_task['task_name']}/seed_{SEED}/"
     )
 
     best_model_state, early_stop = loop_for_cnn_training(

@@ -44,17 +44,24 @@ class TimeCNNTransform:
     def __call__(self, shot: Dict[str, Any]) -> Dict[str, Any]:
 
         shot.update({
-            "input": [ np.expand_dims(arr, axis=0) if arr.shape[0] != 1 else arr
-                      for arr in (np.moveaxis(data["values"][..., self.list_id_start_time_input[i]:], -1, 0)
-                                  for i, (var, data) in enumerate(shot["input"].items()))
+            "input": [ 
+
+                # np.expand_dims(arr, axis=0) if arr.shape[0] != 1 else arr
+                np.expand_dims(arr, axis=0) 
+                for arr in (np.moveaxis(data["values"][..., self.list_id_start_time_input[i]:], -1, 0)
+                for i, (var, data) in enumerate(shot["input"].items()))
                                   ],
-            "actuator": [ np.expand_dims(arr, axis=0) if arr.shape[0] != 1 else arr
-                      for arr in (np.moveaxis(data["values"][..., self.list_id_start_time_actuator[i]:], -1, 0)
-                                  for i, (var, data) in enumerate(shot["actuator"].items()))
+            "actuator": [ 
+                # np.expand_dims(arr, axis=0) if arr.shape[0] != 1 else arr
+                np.expand_dims(arr, axis=0) 
+                for arr in (np.moveaxis(data["values"][..., self.list_id_start_time_actuator[i]:], -1, 0)
+                for i, (var, data) in enumerate(shot["actuator"].items()))
                                   ],
-            "output": [ np.expand_dims(arr, axis=0) if arr.shape[0] != 1 else arr
-                      for arr in (np.moveaxis(data["values"], -1, 0)
-                                  for var, data in shot["output"].items())
+            "output": [ 
+                # np.expand_dims(arr, axis=0) if arr.shape[0] != 1 else arr
+                np.expand_dims(arr, axis=0)                       
+                for arr in (np.moveaxis(data["values"], -1, 0)
+                for var, data in shot["output"].items())
                                   ]
             })
         

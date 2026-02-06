@@ -26,7 +26,7 @@ from MAST_benchmark.data import (
 from MAST_benchmark.evaluator import (
     WindowMetricsWriter, 
     compute_task_metrics, 
-    # compute_all_metrics
+    compute_all_metrics
 )
 
 
@@ -69,7 +69,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_cnn",
         type=str,
-        default="/config/config_cnn_batch_32_workers_16_lr_0001_D_16.yaml",
+        default="/src/config/config_cnn_batch_32_workers_16_lr_0001_D_16.yaml",
+        help="Path to the model YAML config file",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42, #200399 or 140801
         help="Path to the model YAML config file",
     )
     args, _ = parser.parse_known_args()
@@ -80,6 +86,9 @@ if __name__ == "__main__":
     # Load CNN YAML config
     with open(REPO_ROOT + args.config_cnn, "r") as f:
         config_cnn = yaml.safe_load(f)
+    
+    SEED = args.seed
+    print(SEED)
     
     # ------------------------------------------------------------------------------------------------------------------
     # Initialize task-specific metadata
@@ -144,32 +153,26 @@ if __name__ == "__main__":
     # Training loop
     # -------------------------------------------------------------------
 
-    # base = config_cnn["paths"]["data_output_directory"]
-    base = "/output_NEW_v1/cnn_model"
+    base = config_cnn["paths"]["data_output_directory"]
 
     print(config_cnn)
-
     base_model_dir = (
         REPO_ROOT
         + base
-        + f"/{config_task['task_name']}"
-        # + "/model_v5_filled_cutting_input/"
-        + "/model_v5_filled/"
+        + f"/{config_task['task_name']}/seed_{SEED}/"
     )
-    
-    counter = 1
-    model_dir = base_model_dir.rstrip("/") + f"/run_{counter}/"
 
     # -------------------------------------------------------------------
     # Evaluation
     # -------------------------------------------------------------------
 
-    cnn_sanity_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, model_dir, n_shot_to_plot=3)
+    results_dir = REPO_ROOT + f"/results/seed_{SEED}/"
 
-    results_dir = REPO_ROOT + "/results_NEW_v1_updated"
+    # cnn_sanity_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, base_model_dir, n_shot_to_plot=3)
+
     print(results_dir)
     window_metrics = WindowMetricsWriter(args.task, results_dir)
-    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, model_dir, window_metrics)
+    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, base_model_dir, window_metrics)
     compute_task_metrics(args.task, results_dir)
 
     # compute_all_metrics(output_dir=results_dir, save_locally=True)

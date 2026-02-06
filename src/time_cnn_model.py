@@ -152,6 +152,11 @@ class Conv1DDecoder(nn.Module):
         final_channels = D * (2 ** (layers - 1))
 
         self.fc = nn.Linear(D, final_channels * self.list_ts_comp[0])
+        # self.fc = nn.Sequential(
+        #     nn.Dropout(0.2),
+        #     nn.Linear(D, final_channels * self.list_ts_comp[0]),
+        #     nn.ReLU()
+        # )
 
         modules = []
         in_channels = final_channels
@@ -305,6 +310,11 @@ class Conv2DDecoder(nn.Module):
         final_channels = D * (2 ** (layers - 1))
 
         self.fc = nn.Linear(D, final_channels * self.list_ts_comp[0] * self.list_height_comp[0])
+        # self.fc = nn.Sequential(
+        #     nn.Dropout(0.2),
+        #     nn.Linear(D, final_channels * self.list_ts_comp[0] * self.list_height_comp[0]),
+        #     nn.ReLU()
+        # )
 
         modules = []
         in_channels = final_channels
@@ -470,6 +480,11 @@ class Conv3DDecoder(nn.Module):
         final_channels = D * (2 ** (layers - 1))
 
         self.fc = nn.Linear(D, final_channels * self.list_ts_comp[0] * self.list_height_comp[0] * self.list_weight_comp[0])
+        # self.fc = nn.Sequential(
+        #     nn.Dropout(0.2),
+        #     nn.Linear(D, final_channels * self.list_ts_comp[0] * self.list_height_comp[0] * self.list_weight_comp[0]),
+        #     nn.ReLU()
+        # )
 
         modules = []
         in_channels = final_channels
@@ -567,28 +582,30 @@ class MultiBranchTimeCNNModel(nn.Module):
                 branch = Conv3DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
             elif len(var_shape) == 3:
                 branch = Conv2DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
-            elif len(var_shape) == 2 and var_shape != (1, 2):
+            # elif len(var_shape) == 2 and var_shape != (1, 2):
+            elif len(var_shape) == 2:
                 branch = Conv1DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
-            elif var_shape == (1, 2):
-                # Flatten first if needed, like 1D input
-                # print('x_point exception')
-                branch = nn.Sequential(
-                    nn.Flatten(),              # (1, 2) -> (2,)
-                    nn.Linear(D, 2*D),         # same structure as 0D branch
-                    nn.ReLU(),
-                    nn.Linear(2*D, 4*D),
-                    nn.ReLU(),
-                    nn.Linear(4*D, 2),         
-                    nn.Unflatten(1, var_shape) # reshape back to (1, 2)
-                )
-            elif len(var_shape) == 1:
-                branch = nn.Sequential(
-                    nn.Linear(D, 2*D),
-                    nn.ReLU(),
-                    nn.Linear(2*D, 4*D),
-                    nn.ReLU(),
-                    nn.Linear(4*D, var_shape[0])
-                )
+            # elif var_shape == (1, 2):
+            #     # Flatten first if needed, like 1D input
+            #     # print('x_point exception')
+            #     branch = nn.Sequential(
+            #         nn.Flatten(),              # (1, 2) -> (2,)
+            #         nn.Linear(D, 2*D),         # same structure as 0D branch
+            #         nn.ReLU(),
+            #         nn.Linear(2*D, 4*D),
+            #         nn.ReLU(),
+            #         nn.Linear(4*D, 2),         
+            #         nn.Unflatten(1, var_shape) # reshape back to (1, 2)
+            #     )
+            # elif len(var_shape) == 1:
+            #     print(var_shape)
+            #     branch = nn.Sequential(
+            #         nn.Linear(D, 2*D),
+            #         nn.ReLU(),
+            #         nn.Linear(2*D, 4*D),
+            #         nn.ReLU(),
+            #         nn.Linear(4*D, var_shape[0])
+            #     )
             else:
                 raise ValueError(f"Unsupported input shape: {var_shape}")
             self.output_branches.append(branch)
@@ -729,45 +746,45 @@ tasks = {
 }
 
 
-results = {}
+# results = {}
 
-for name, cfg in tasks.items():
+# for name, cfg in tasks.items():
 
-    model = MultiBranchTimeCNNModel(cfg["input"], cfg["output"], D)
+#     model = MultiBranchTimeCNNModel(cfg["input"], cfg["output"], D)
 
-    # dummy input
-    dummy_input = [torch.randn((B,)+s) for s in cfg["input"]]
+#     # dummy input
+#     dummy_input = [torch.randn((B,)+s) for s in cfg["input"]]
 
-    # get actual output shapes
-    with torch.no_grad():
-        actual_outputs = model(*dummy_input)
-        actual_shapes = [tuple(o.shape) for o in actual_outputs]
+#     # get actual output shapes
+#     with torch.no_grad():
+#         actual_outputs = model(*dummy_input)
+#         actual_shapes = [tuple(o.shape) for o in actual_outputs]
 
-    # torchinfo summary
-    shape_input = [(B,)+s for s in cfg["input"]]
-    s = summary(model, input_size=(shape_input), verbose=0)
-    print(s)
+#     # torchinfo summary
+#     shape_input = [(B,)+s for s in cfg["input"]]
+#     s = summary(model, input_size=(shape_input), verbose=0)
+#     print(s)
     
-    results[name] = {
-        "total_params": s.total_params,
-        "trainable_params": s.trainable_params,
-        "non_trainable_params": s.total_params - s.trainable_params,
-        "actual_output_shapes": actual_shapes,
-        "demanded_output_shapes": cfg["output"]
-    }
+#     results[name] = {
+#         "total_params": s.total_params,
+#         "trainable_params": s.trainable_params,
+#         "non_trainable_params": s.total_params - s.trainable_params,
+#         "actual_output_shapes": actual_shapes,
+#         "demanded_output_shapes": cfg["output"]
+#     }
 
-# # print RESULTS
-for k,v in results.items():
-    print(f"\nTASK {k}")
-    print(f"Total params: {v['total_params']:,}")
-    print(f"Trainable params: {v['trainable_params']:,}")
-    print(f"Non-trainable params: {v['non_trainable_params']:,}")
-    print("Actual output shapes:")
-    for shp in v['actual_output_shapes']:
-        print("   ", shp)
-    print("Demanded output shapes:")
-    for shp in v['demanded_output_shapes']:
-        print("   ", shp)
+# # # print RESULTS
+# for k,v in results.items():
+#     print(f"\nTASK {k}")
+#     print(f"Total params: {v['total_params']:,}")
+#     print(f"Trainable params: {v['trainable_params']:,}")
+#     print(f"Non-trainable params: {v['non_trainable_params']:,}")
+#     print("Actual output shapes:")
+#     for shp in v['actual_output_shapes']:
+#         print("   ", shp)
+#     print("Demanded output shapes:")
+#     for shp in v['demanded_output_shapes']:
+#         print("   ", shp)
 
 
 
