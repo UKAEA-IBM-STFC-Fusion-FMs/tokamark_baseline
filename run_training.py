@@ -20,7 +20,7 @@ from MAST_benchmark.tools.transforms.compose_transform import (
 )
 from MAST_benchmark.data import (
     initialize_MAST_dataset, 
-    initialize_model_dataset
+    initialize_TokaMark_dataset,
 )
 from src.time_cnn_model import (
     create_cnn_architecture
@@ -30,7 +30,9 @@ from src.time_cnn_transform import (
 )
 from src.trainer import (
     cnn_collate_fn,
-    loop_for_cnn_training,
+    # loop_for_cnn_training,
+    # train_loop,
+    BatchStepTrainer,
 )
 
 # Set device
@@ -50,19 +52,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--task",
         type=str,
-        default="task_1-1",
+        default="task_4-5",
         help="The name of the task available in the benchmark",
     )
     parser.add_argument(
         "--config_cnn",
         type=str,
-        default="/src/config/config_cnn_batch_32_workers_16_lr_0001_D_16.yaml",
+        default="/src/config/config_cnn_test.yaml",
+        # default="/src/config/config_cnn_iterable_lr_4_work_4.yaml",
         help="Path to the model YAML config file",
     )
     parser.add_argument(
         "--seed",
         type=int,
-        default=42, #200399 or 140801
+        default=23, #200399 or 140801
         help="Path to the model YAML config file",
     )
     args, _ = parser.parse_known_args()
@@ -87,8 +90,11 @@ if __name__ == "__main__":
                      "task_4-1", "task_4-2",
                      "task_4-3", "task_4-4", "task_4-5"]:              
         config_task["stride_window"] = 0.025
+        # shuffle_buffer_size = 512
+        shuffle_buffer_size = 2048
     else:
         config_task["stride_window"] = 0.005
+        shuffle_buffer_size = 2048
 
     dict_task_metadata = get_task_metadata(
         config_task,
@@ -137,8 +143,8 @@ if __name__ == "__main__":
     g = torch.Generator()
     g.manual_seed(SEED)
 
-    train_dataset = initialize_model_dataset(
-        train_MAST_dataset, dict_task_metadata, config_task, model_specific_transform, test_mode=True
+    train_dataset = initialize_TokaMark_dataset(
+        train_MAST_dataset, dict_task_metadata, config_task, model_specific_transform, test_mode=True, 
     )
     train_dataloader = DataLoader(
             dataset=train_dataset,
@@ -146,10 +152,11 @@ if __name__ == "__main__":
             worker_init_fn=seed_worker,
             generator=g,
             **config_cnn["dataloader_setting"],
-            pin_memory=True
+            pin_memory=True,
+            drop_last=True,
         )
 
-    val_dataset = initialize_model_dataset(
+    val_dataset = initialize_TokaMark_dataset(
         val_MAST_dataset, dict_task_metadata, config_task, model_specific_transform, test_mode=True
     )
     val_dataloader = DataLoader(
@@ -158,7 +165,7 @@ if __name__ == "__main__":
             worker_init_fn=seed_worker,
             generator=g,
             **config_cnn["dataloader_setting"],
-            pin_memory=True
+            pin_memory=True,
         )
 
     cnn_model = create_cnn_architecture(
@@ -177,12 +184,16 @@ if __name__ == "__main__":
         + f"/{config_task['task_name']}/seed_{SEED}/"
     )
 
-    best_model_state, early_stop = loop_for_cnn_training(
-        base_cnn_model=cnn_model,
-        train_dataloader=train_dataloader,
-        val_dataloader=val_dataloader,
+    trainer = BatchStepTrainer(
+        model=cnn_model,
+        train_loader=train_dataloader,
+        val_loader=val_dataloader,
         **config_cnn["training_args"],
         output_dir=base_model_dir,
-        verbose=True,
+        device=device,
+        validate_every=100,  # validate every 100 batches
     )
 
+    # Step through batches
+    while trainer.step_batch():
+        pass

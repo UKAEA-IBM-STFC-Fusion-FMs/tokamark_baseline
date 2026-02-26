@@ -17,14 +17,20 @@ layers_decoder = 3
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-def create_cnn_architecture(dataloader_, D, verbose=False):
+def create_cnn_architecture(dataloader_, D, verbose=True):
     if verbose:
         print("\n\n----------CNN MODEL INITIALIZATION----------\n")
 
-    for l in range(len(dataloader_.dataset)):
+    # for l in range(len(dataloader_.dataset)):
+    for l, first_window in enumerate(dataloader_.dataset):
+        print(l)
+        print(first_window['shot_id'])
         try:
-            windows_gen = dataloader_.dataset[l]  # this is a generator
-            first_window = next(windows_gen) 
+            # windows_gen = dataloader_.dataset[l]  # this is a generator
+            # first_window = next(windows_gen) 
+
+            # first_window = next(windows_gen)
+
             input_shapes = [arr.shape for arr in first_window["x"]]
             output_shape = [arr.shape for arr in first_window["y"]]
 
@@ -37,7 +43,7 @@ def create_cnn_architecture(dataloader_, D, verbose=False):
 
         except Exception as e:
             print(
-                f"Skipping {dataloader_.dataset.get_shot_id(l)} because shot not trainable: {e}"
+                f"Skipping sample {l} because not trainable: {e}"
             )
             continue
 
@@ -623,18 +629,18 @@ class MultiBranchTimeCNNModel(nn.Module):
         branch_outputs = []
 
         for branch, x in zip(self.input_branches, inputs):
-            out = checkpoint(self._run_encoder, branch, x)
+            out = checkpoint(self._run_encoder, branch, x, use_reentrant=False)
             branch_outputs.append(out)
 
         merged = torch.cat(branch_outputs, dim=1)
 
         # checkpoint backbone
-        merged = checkpoint(self.backbone, merged)
+        merged = checkpoint(self.backbone, merged, use_reentrant=False)
 
         decoded_representation = []
 
         for branch in self.output_branches:
-            out = checkpoint(self._run_decoder, branch, merged)
+            out = checkpoint(self._run_decoder, branch, merged, use_reentrant=False)
             decoded_representation.append(out)
 
         return decoded_representation

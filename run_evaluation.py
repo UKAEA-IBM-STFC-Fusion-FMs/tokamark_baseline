@@ -20,7 +20,8 @@ from MAST_benchmark.tools.transforms.compose_transform import (
     ComposeTransforms,
 )
 from MAST_benchmark.data import (
-    initialize_MAST_dataset, initialize_model_dataset
+    initialize_MAST_dataset, 
+    initialize_TokaMark_dataset,
 )
 
 from MAST_benchmark.evaluator import (
@@ -69,13 +70,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_cnn",
         type=str,
-        default="/src/config/config_cnn_batch_32_workers_16_lr_0001_D_16.yaml",
+        default="/src/config/config_cnn_iterable_lr_4_work_4.yaml",
         help="Path to the model YAML config file",
     )
     parser.add_argument(
         "--seed",
         type=int,
-        default=42, #200399 or 140801
+        default=23,
         help="Path to the model YAML config file",
     )
     args, _ = parser.parse_known_args()
@@ -129,14 +130,22 @@ if __name__ == "__main__":
         ]
     )
     
-    test_dataset = initialize_model_dataset(
-        test_MAST_dataset, dict_task_metadata, config_task, model_specific_transform, test_mode=True
+    test_dataset = initialize_TokaMark_dataset(
+        test_MAST_dataset, 
+        dict_task_metadata, 
+        config_task, 
+        model_specific_transform, 
+        test_mode=True,
+        shuffle_windows=False,
     )
     test_dataloader = DataLoader(
             dataset=test_dataset,
             collate_fn=cnn_collate_fn,
+            # worker_init_fn=seed_worker,
+            # generator=g,
             **config_cnn["dataloader_setting"],
-            pin_memory=True
+            pin_memory=True,
+            # drop_last=True,
         )    
     test_dataloader_vizu = DataLoader(
             dataset=test_dataset,
@@ -166,13 +175,14 @@ if __name__ == "__main__":
     # Evaluation
     # -------------------------------------------------------------------
 
-    results_dir = REPO_ROOT + f"/results/seed_{SEED}/"
+    results_dir = REPO_ROOT + f"/results_NEW/seed_{SEED}/"
 
     # cnn_sanity_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, base_model_dir, n_shot_to_plot=3)
 
-    print(results_dir)
-    window_metrics = WindowMetricsWriter(args.task, results_dir)
-    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, base_model_dir, window_metrics)
-    compute_task_metrics(args.task, results_dir)
+    # print(results_dir)
 
-    # compute_all_metrics(output_dir=results_dir, save_locally=True)
+    # window_metrics = WindowMetricsWriter(args.task, results_dir)
+    # cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, base_model_dir, window_metrics)
+    # compute_task_metrics(args.task, results_dir)
+
+    compute_all_metrics(output_dir=results_dir, save_locally=True)

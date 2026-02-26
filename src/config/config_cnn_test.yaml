@@ -1,4 +1,4 @@
-subset_of_shots: 512
+subset_of_shots: 128
 local: true
 
 cnn_settings:
@@ -6,16 +6,16 @@ cnn_settings:
 
 dataloader_setting:
   batch_size: 8
-  num_workers: 0
+  num_workers: 2
   # batch_size: 64 
   # num_workers: 64
-  shuffle: True
+  # shuffle: True 
 
 training_args:
   # lr: 0.00001
-  lr: 0.0001 # was working with 0.001
-  max_epochs: 2 #500
+  lr: 0.001 # was working with 0.001
+  max_steps: 200000 #500
   patience: 5
 
 paths:
-  data_output_directory: /output/cnn_model_test/
+  data_output_directory: /output/cnn_model_test
