@@ -25,9 +25,9 @@ from MAST_benchmark.data import (
 )
 
 from MAST_benchmark.evaluator import (
-    WindowMetricsWriter, 
-    compute_task_metrics, 
-    compute_all_metrics
+    WindowMetricsAccumulator,
+    compute_metrics,
+    compute_summary_metrics, 
 )
 
 
@@ -131,13 +131,17 @@ if __name__ == "__main__":
     )
     
     test_dataset = initialize_TokaMark_dataset(
-        test_MAST_dataset, 
-        dict_task_metadata, 
-        config_task, 
-        model_specific_transform, 
+        test_MAST_dataset,
+        dict_task_metadata,
+        config_task,
+        model_specific_transform,
         test_mode=True,
         shuffle_windows=False,
     )
+    
+    if test_dataset is None:
+        raise ValueError("Failed to initialize test dataset. test_MAST_dataset may be None or invalid.")
+    
     test_dataloader = DataLoader(
             dataset=test_dataset,
             collate_fn=cnn_collate_fn,
@@ -175,14 +179,23 @@ if __name__ == "__main__":
     # Evaluation
     # -------------------------------------------------------------------
 
-    results_dir = REPO_ROOT + f"/results_NEW/seed_{SEED}/"
+    results_dir = REPO_ROOT + f"/results_NEW_vfinal_MR_RERUN/seed_{SEED}/"
+    print(results_dir)
 
     # cnn_sanity_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, base_model_dir, n_shot_to_plot=3)
 
-    # print(results_dir)
+    # accumulator = WindowMetricsAccumulator(args.task)
+    # cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, base_model_dir, accumulator)
+    
+    # compute_metrics(
+    #     task=args.task,
+    #     output_dir=results_dir,
+    #     window_metrics_accumulator=accumulator,
+    #     # save_windows_metrics=pipeline_config.get("save_windows_metrics", False),
+    #     # save_task_metrics=pipeline_config.get("save_task_metrics", True),
+    #     save_windows_metrics=True,
+    #     save_task_metrics=True,
+    # )
 
-    # window_metrics = WindowMetricsWriter(args.task, results_dir)
-    # cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, base_model_dir, window_metrics)
-    # compute_task_metrics(args.task, results_dir)
-
-    compute_all_metrics(output_dir=results_dir, save_locally=True)
+    compute_summary_metrics(results_dir)
+    print('DONE')

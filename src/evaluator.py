@@ -22,7 +22,7 @@ def cnn_unstd_evaluation_per_shot(
     config_task,
     cnn_model,
     output_dir,
-    window_metrics
+    accumulator
     # device="cuda" if torch.cuda.is_available() else "cpu"
 ):
     """
@@ -103,7 +103,13 @@ def cnn_unstd_evaluation_per_shot(
                 unstd_y_t = y_t*std + mean
                 unstd_y_p = y_p*std + mean 
 
-                window_metrics.compute_and_append(np.float128(unstd_y_t), np.float128(unstd_y_p), shot_id, window_id, f"{feature_name[0]}-{feature_name[1]}")
+                accumulator.add_batch(
+                    y_target=np.float128(unstd_y_t),
+                    y_pred=np.float128(unstd_y_p),
+                    shot_id=shot_id,
+                    window_index=window_id,
+                    feature_name=f"{feature_name[0]}-{feature_name[1]}",
+                )
 
     print("💅🏼 UNSTD Evaluation done. RMSEs and MSEs saved (incrementally).")
 
