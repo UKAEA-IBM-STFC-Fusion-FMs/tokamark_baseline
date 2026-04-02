@@ -5,12 +5,13 @@ import torch.multiprocessing as mp
 
 from torch.utils.data import DataLoader
 
-# -------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 # Repo-specific imports
-# -------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 try:
     from globals import REPO_ROOT
-except:
+except ImportError:
     from .globals import REPO_ROOT
 
 from MAST_benchmark.tools.utils import get_device
@@ -27,7 +28,6 @@ from MAST_benchmark.data import (
 from MAST_benchmark.evaluator import (
     WindowMetricsAccumulator,
     compute_metrics,
-    compute_summary_metrics, 
 )
 
 
@@ -44,15 +44,19 @@ from src.trainer import (
 )
 
 from src.evaluator import (
-    cnn_sanity_vizu_per_shot,
+    # cnn_safety_vizu_per_shot,
     cnn_unstd_evaluation_per_shot,
 )
 
+
+# ----------------------------------------------------------------------------------------------------------------------
 
 # Set device
 device = get_device()
 # print(f"Using device: {device}\n")
 
+
+# ======================================================================================================================
 if __name__ == "__main__":
     print(f"Number of available CPU cores: {cpu_count()}\n")
     mp.set_start_method("spawn", force=True)
@@ -60,6 +64,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------------------------------------------
     # Argument parsing
     # ------------------------------------------------------------------------------------------------------------------
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--task",
@@ -77,12 +82,16 @@ if __name__ == "__main__":
         "--seed",
         type=int,
         default=23,
-        help="Path to the model YAML config file",
+        help="Specified seed"
     )
     args, _ = parser.parse_known_args()
 
+    # ------------------------------------------------------------------------------------------------------------------
+    # Some configuration tasks
+    # ------------------------------------------------------------------------------------------------------------------
+
     # Load Task YAML config
-    config_task = get_task_config(args.task)    
+    config_task = get_task_config(task_name=args.task)
 
     # Load CNN YAML config
     with open(REPO_ROOT + args.config_cnn, "r") as f:
@@ -96,7 +105,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------------------------------------------
 
     dict_task_metadata = get_task_metadata(
-        config_task,
+        config_task=config_task,
         verbose=False
     )
 
@@ -111,10 +120,10 @@ if __name__ == "__main__":
     local_flag = config_cnn["local"]
 
     test_MAST_dataset = initialize_MAST_dataset( 
-        config_task,
-        test_shots_,
-        local_flag = local_flag,
-        use_std_scaling = True,
+        config_task=config_task,
+        shots_list=test_shots_,
+        local_flag=local_flag,
+        use_std_scaling=True,
         return_incomplete_shots=True,
         remove_outliers=True,
         verbose=False
@@ -131,12 +140,12 @@ if __name__ == "__main__":
     )
     
     test_dataset = initialize_TokaMark_dataset(
-        test_MAST_dataset,
-        dict_task_metadata,
-        config_task,
-        model_specific_transform,
+        dataset=test_MAST_dataset,
+        task_metadata=dict_task_metadata,
+        config_metadata=config_task,
+        custom_transform=model_specific_transform,
         test_mode=True,
-        shuffle_windows=False,
+        shuffle_windows=False
     )
     
     if test_dataset is None:
@@ -145,21 +154,20 @@ if __name__ == "__main__":
     test_dataloader = DataLoader(
             dataset=test_dataset,
             collate_fn=cnn_collate_fn,
-            # worker_init_fn=seed_worker,
-            # generator=g,
             **config_cnn["dataloader_setting"],
             pin_memory=True,
-            # drop_last=True,
         )    
     test_dataloader_vizu = DataLoader(
             dataset=test_dataset,
             collate_fn=cnn_collate_fn,
-            batch_size = 1,
-            num_workers = 0,
+            batch_size=1,
+            num_workers=0,
         )
 
     cnn_model = create_cnn_architecture(
-        test_dataloader_vizu, **config_cnn["cnn_settings"], verbose=True
+        dataloader_=test_dataloader_vizu,
+        **config_cnn["cnn_settings"],
+        verbose=True
     )
 
     # -------------------------------------------------------------------
@@ -180,22 +188,15 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------
 
     results_dir = REPO_ROOT + f"/results_NEW_vfinal_MR_RERUN/seed_{SEED}/"
-    print(results_dir)
 
-    # cnn_sanity_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, base_model_dir, n_shot_to_plot=3)
-
-    # accumulator = WindowMetricsAccumulator(args.task)
-    # cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, base_model_dir, accumulator)
+    # cnn_safety_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, base_model_dir, n_shot_to_plot=3)
+    accumulator = WindowMetricsAccumulator(args.task)
+    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, base_model_dir, accumulator)
     
-    # compute_metrics(
-    #     task=args.task,
-    #     output_dir=results_dir,
-    #     window_metrics_accumulator=accumulator,
-    #     # save_windows_metrics=pipeline_config.get("save_windows_metrics", False),
-    #     # save_task_metrics=pipeline_config.get("save_task_metrics", True),
-    #     save_windows_metrics=True,
-    #     save_task_metrics=True,
-    # )
-
-    compute_summary_metrics(results_dir)
-    print('DONE')
+    compute_metrics(
+        task=args.task,
+        output_dir=results_dir,
+        window_metrics_accumulator=accumulator,
+        save_windows_metrics=True,
+        save_task_metrics=True,
+    )

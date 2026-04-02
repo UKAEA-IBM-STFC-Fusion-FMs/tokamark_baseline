@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 try:
     from globals import REPO_ROOT
-except:
+except ImportError:
     from .globals import REPO_ROOT
 
 from utils import set_seed, seed_worker
@@ -30,48 +30,62 @@ from src.time_cnn_transform import (
 )
 from src.trainer import (
     cnn_collate_fn,
-    # loop_for_cnn_training,
-    # train_loop,
     BatchStepTrainer,
 )
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 
 # Set device
 device = get_device()
 # print(f"Using device: {device}\n")
 
 
+# ======================================================================================================================
 if __name__ == "__main__":
 
     print(f"Number of available CPU cores: {cpu_count()}\n")
-    mp.set_start_method("spawn", force=True)
+    mp.set_start_method(method="spawn", force=True)
 
     # ------------------------------------------------------------------------------------------------------------------
     # Argument parsing
     # ------------------------------------------------------------------------------------------------------------------
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--task",
         type=str,
-        default="task_4-5",
-        help="The name of the task available in the benchmark",
+        default="task_1-1",
+        help="The name of the task available in the benchmark"
     )
     parser.add_argument(
         "--config_cnn",
         type=str,
         default="/src/config/config_cnn_test.yaml",
         # default="/src/config/config_cnn_iterable_lr_4_work_4.yaml",
-        help="Path to the model YAML config file",
+        help="Path to the model YAML config file."
     )
     parser.add_argument(
         "--seed",
         type=int,
-        default=23, #200399 or 140801
-        help="Path to the model YAML config file",
+        default=23,
+        help="Specified seed."
     )
+    parser.add_argument(
+        "--validate_every",
+        type=int,
+        default=100,
+        help="Number of batches at which validation is performed."
+    )
+
     args, _ = parser.parse_known_args()
 
+    # ------------------------------------------------------------------------------------------------------------------
+    # Some configuration tasks
+    # ------------------------------------------------------------------------------------------------------------------
+
     # Load Task YAML config
-    config_task = get_task_config(args.task)    
+    config_task = get_task_config(task_name=args.task)
 
     # Load CNN YAML config
     with open(REPO_ROOT + args.config_cnn, "r") as f:
@@ -85,19 +99,19 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------------------------------------------
     # Initialize task-specific metadata
     # ------------------------------------------------------------------------------------------------------------------
-    # for training and validation: use stride of 0.005ms and 0.025ms
+
+    # For training and validation: use stride of 0.005ms and 0.025ms
     if args.task in ["task_3-3",
                      "task_4-1", "task_4-2",
                      "task_4-3", "task_4-4", "task_4-5"]:              
         config_task["stride_window"] = 0.025
-        # shuffle_buffer_size = 512
-        shuffle_buffer_size = 2048
+        shuffle_buffer_size = 2048  # Typical options: 512, 2048
     else:
         config_task["stride_window"] = 0.005
         shuffle_buffer_size = 2048
 
     dict_task_metadata = get_task_metadata(
-        config_task,
+        config_task=config_task,
         verbose=False
     )
 
@@ -112,19 +126,19 @@ if __name__ == "__main__":
     local_flag = config_cnn["local"]
 
     train_MAST_dataset = initialize_MAST_dataset( 
-        config_task,
-        train_shots_,
-        local_flag = local_flag,
-        use_std_scaling = True,
+        config_task=config_task,
+        shots_list=train_shots_,
+        local_flag=local_flag,
+        use_std_scaling=True,
         return_incomplete_shots=True,
         remove_outliers=True,
         verbose=False
     )
     val_MAST_dataset = initialize_MAST_dataset( 
-        config_task,
-        val_shots_,
-        local_flag = local_flag,
-        use_std_scaling = True,
+        config_task=config_task,
+        shots_list=val_shots_,
+        local_flag=local_flag,
+        use_std_scaling=True,
         return_incomplete_shots=True,
         remove_outliers=True,
         verbose=False
@@ -144,7 +158,11 @@ if __name__ == "__main__":
     g.manual_seed(SEED)
 
     train_dataset = initialize_TokaMark_dataset(
-        train_MAST_dataset, dict_task_metadata, config_task, model_specific_transform, test_mode=True, 
+        dataset=train_MAST_dataset,
+        task_metadata=dict_task_metadata,
+        config_metadata=config_task,
+        custom_transform=model_specific_transform,
+        test_mode=True
     )
     train_dataloader = DataLoader(
             dataset=train_dataset,
@@ -153,11 +171,15 @@ if __name__ == "__main__":
             generator=g,
             **config_cnn["dataloader_setting"],
             pin_memory=True,
-            drop_last=True,
+            drop_last=True
         )
 
     val_dataset = initialize_TokaMark_dataset(
-        val_MAST_dataset, dict_task_metadata, config_task, model_specific_transform, test_mode=True
+        dataset=val_MAST_dataset,
+        task_metadata=dict_task_metadata,
+        config_metadata=config_task,
+        custom_transform=model_specific_transform,
+        test_mode=True
     )
     val_dataloader = DataLoader(
             dataset=val_dataset,
@@ -165,11 +187,13 @@ if __name__ == "__main__":
             worker_init_fn=seed_worker,
             generator=g,
             **config_cnn["dataloader_setting"],
-            pin_memory=True,
+            pin_memory=True
         )
 
     cnn_model = create_cnn_architecture(
-        train_dataloader, **config_cnn["cnn_settings"], verbose=True
+        dataloader_=train_dataloader,
+        **config_cnn["cnn_settings"],
+        verbose=True
     )
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -191,9 +215,10 @@ if __name__ == "__main__":
         **config_cnn["training_args"],
         output_dir=base_model_dir,
         device=device,
-        validate_every=100,  # validate every 100 batches
+        validate_every=args.validate_every,  # Validate every 100 batches by default.
     )
 
     # Step through batches
     while trainer.step_batch():
+        # A single pass update is performed as long as `trainer.step_batch()` is True.
         pass

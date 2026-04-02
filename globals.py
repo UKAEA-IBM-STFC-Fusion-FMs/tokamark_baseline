@@ -1,6 +1,9 @@
 import os
 import sys
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+
 # Dynamically find the repo root (no hardcoding!)
 REPO_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__))
@@ -18,6 +21,8 @@ if REPO_ROOT not in sys.path:
 if TOOLS_DIR not in sys.path:
     sys.path.insert(0, TOOLS_DIR)
 
+
+# ======================================================================================================================
 # You can print to verify when developing
 if __name__ == "__main__":
     print("Repo root:", REPO_ROOT)

@@ -5,11 +5,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from MAST_benchmark.tasks import get_task_metadata
+from MAST_benchmark.tools.utils import get_device
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 
 # Set device
-from MAST_benchmark.tools.utils import get_device
 device = get_device()
-# print(f"Using device: {device}\n")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -23,20 +25,12 @@ def cnn_unstd_evaluation_per_shot(
     cnn_model,
     output_dir,
     accumulator
-    # device="cuda" if torch.cuda.is_available() else "cpu"
 ):
-    """
-    Evaluate CNN per shot/window and save incremental RMSEs to CSV.
-    """
+    """Evaluate CNN per shot/window and save incremental RMSEs to CSV."""
 
     print("in cnn_unstd_evaluation_per_shot")
 
     best_model_path = output_dir + "best_model.pt"
-    # csv_path = output_dir + f"{config_task['task_name']}_evaluation_per_window_NEW.csv"
-
-    # remove old file if present
-    # if os.path.exists(csv_path):
-    #     os.remove(csv_path)
 
     # Load best model
     cnn_model.load_state_dict(torch.load(best_model_path, map_location=device))
@@ -49,13 +43,6 @@ def cnn_unstd_evaluation_per_shot(
         config_task,
         verbose=False
     )
-
-    # Initialize CSV if it doesn’t exist
-    # if not os.path.exists(csv_path):
-    #     pd.DataFrame(
-    #         # columns=["shot_id", "window_id", "feature_name", "global_mean", "global_std", "RMSE", "MSE", "MAE"]
-    #         columns=["shot_id", "window_id", "feature_name", "norm", "RMSE", "MSE", "MAE"]
-    #     ).to_csv(csv_path, index=False)
 
     # === Evaluation loop ===
     with torch.no_grad():
@@ -75,8 +62,6 @@ def cnn_unstd_evaluation_per_shot(
             # Make sure y_pred is list-like
             if not isinstance(y_pred, (list, tuple)):
                 y_pred = [y_pred]
-
-            # batch_rows = []
 
             for i, feature_name in enumerate(feature_names):
 
@@ -106,29 +91,27 @@ def cnn_unstd_evaluation_per_shot(
                 accumulator.add_batch(
                     y_target=np.float128(unstd_y_t),
                     y_pred=np.float128(unstd_y_p),
-                    shot_id=shot_id,
-                    window_index=window_id,
+                    shot_ids=shot_id,
+                    window_indices=window_id,
                     feature_name=f"{feature_name[0]}-{feature_name[1]}",
                 )
 
     print("💅🏼 UNSTD Evaluation done. RMSEs and MSEs saved (incrementally).")
 
+
 # ----------------------------------------------------------------------------------------------------------------------
-# CNN SANITY VISUALIZATION LOOP
+# CNN SAFETY VISUALIZATION LOOP
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-def cnn_sanity_vizu_per_shot(
+def cnn_safety_vizu_per_shot(  # NOSONAR - Ignore cognitive complexity
     test_dataloader,
     config_task,
     cnn_model,
     output_dir,
-    n_shot_to_plot = 3
-    # device="cuda" if torch.cuda.is_available() else "cpu"
+    n_shot_to_plot=3
 ):
-    """
-    Plot some shots CNN per shot/window and save incremental RMSEs to CSV.
-    """
+    """Plot some shots CNN per shot/window and save incremental RMSEs to CSV."""
 
     # === Setup paths ===
     best_model_path = output_dir + "best_model.pt"
@@ -151,17 +134,17 @@ def cnn_sanity_vizu_per_shot(
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_dataloader):
             
-            if counter>=n_shot_to_plot:
+            if counter >= n_shot_to_plot:
                 break
 
             if batch is None:
                 continue
 
-            counter +=1
+            counter += 1
 
             shot_id, window_id, x_test, y_test = batch
 
-            plot_dir = output_dir + f"sanity_vizu/shot_{shot_id[0]}/"
+            plot_dir = output_dir + f"safety_vizu/shot_{shot_id[0]}/"
             os.makedirs(plot_dir, exist_ok=True)
 
             # Move inputs and labels to device
@@ -175,8 +158,6 @@ def cnn_sanity_vizu_per_shot(
             if not isinstance(y_pred, (list, tuple)):
                 y_pred = [y_pred]
 
-            batch_rows = []
-
             # === Compute RMSEs per feature ===
             for i, feature_name in enumerate(feature_names):
 
@@ -187,7 +168,6 @@ def cnn_sanity_vizu_per_shot(
                     .detach()
                     .cpu()
                     .squeeze(1)
-                    # .reshape(len(shot_id), -1)
                     .numpy()
                 )
                 y_p = (
@@ -195,7 +175,6 @@ def cnn_sanity_vizu_per_shot(
                     .detach()
                     .cpu()
                     .squeeze(1)
-                    # .reshape(len(shot_id), -1)
                     .numpy()
                 )
 
@@ -208,9 +187,9 @@ def cnn_sanity_vizu_per_shot(
                 print('unstd_y_t.shape', unstd_y_t.shape)
                 print('unstd_y_t.ndim', unstd_y_t.ndim)
 
-                if unstd_y_t.ndim==1:
+                if unstd_y_t.ndim == 1:
 
-                    plt.figure(figsize=(10,5))
+                    plt.figure(figsize=(10, 5))
 
                     plt.plot(unstd_y_t, label="True")
                     plt.plot(unstd_y_p, '--', label="Pred")
@@ -221,11 +200,11 @@ def cnn_sanity_vizu_per_shot(
                     plt.legend()
                     plt.grid(True)
 
-                elif unstd_y_t.ndim==2 and unstd_y_t.shape[1]==2:
+                elif (unstd_y_t.ndim == 2) and (unstd_y_t.shape[1] == 2):
 
                     print('hey')
 
-                    plt.figure(figsize=(10,5))
+                    plt.figure(figsize=(10, 5))
 
                     plt.plot(unstd_y_t[:, 0], label="True")
                     plt.plot(unstd_y_p[:, 0], '--', label="Pred")
@@ -239,7 +218,7 @@ def cnn_sanity_vizu_per_shot(
                     plt.legend()
                     plt.grid(True)
                 
-                elif unstd_y_t.ndim == 2 and unstd_y_t.shape[1]!=2:
+                elif (unstd_y_t.ndim == 2) and (unstd_y_t.shape[1] != 2):
 
                     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -259,12 +238,12 @@ def cnn_sanity_vizu_per_shot(
                     plt.tight_layout()
                     plt.show()
                 
-                elif (unstd_y_t.ndim==3 and unstd_y_t.shape[2] == 2):
+                elif (unstd_y_t.ndim == 3) and (unstd_y_t.shape[2] == 2):
                     
                     n_dim = unstd_y_t.shape[-1]
                     print(unstd_y_t.shape)
 
-                    plt.figure(figsize=(10,5))
+                    plt.figure(figsize=(10, 5))
 
                     # Line plots
                     colors = plt.cm.tab10.colors
@@ -280,7 +259,7 @@ def cnn_sanity_vizu_per_shot(
                     plt.legend()
                     plt.grid(True)
                 
-                elif unstd_y_t.ndim==4 :
+                elif unstd_y_t.ndim == 4:
 
                     n_time = np.linspace(0, unstd_y_p.shape[0] - 1, 5, dtype=int)
 
@@ -323,7 +302,7 @@ def cnn_sanity_vizu_per_shot(
 
                 else:
 
-                    plt.figure(figsize=(10,5))
+                    plt.figure(figsize=(10, 5))
 
                     flat_y_p = unstd_y_p.reshape(len(shot_id), -1)
                     flat_y_t = unstd_y_t.reshape(len(shot_id), -1)
@@ -356,8 +335,11 @@ def cnn_sanity_vizu_per_shot(
                     plt.ylabel("Output Dimension")
 
                 plt.tight_layout()
-                plt.savefig(plot_dir + f"prediction_plot_{feature_name[0]}-{feature_name[1]}.png", dpi=300, bbox_inches="tight")
-                plt.close()  # <- this frees memory
+                plt.savefig(
+                    plot_dir + f"prediction_plot_{feature_name[0]}-{feature_name[1]}.png",
+                    dpi=300,
+                    bbox_inches="tight"
+                )
+                plt.close() 
 
     print(f"Visualization saved. Go check in: {output_dir}")
-
