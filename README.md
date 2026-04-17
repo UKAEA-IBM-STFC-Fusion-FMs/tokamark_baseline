@@ -272,8 +272,7 @@ This architecture provides a flexible, scalable baseline for fusion plasma predi
 
 ## Citing TokaMark
 
-TokaMark has been submitted to the *32nd SIGKDD Conference on Knowledge Discovery and Data Mining, 2026*, and it is
-currently being reviewed. A preprint version of the manuscript is available [here](https://arxiv.org/abs/2602.10132).
+A preprint version of the manuscript is available [here](https://arxiv.org/abs/2602.10132).
 
 If you use TokaMark, please cite our work as:
 
