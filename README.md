@@ -262,3 +262,31 @@ python run_evaluation.py --task task_1-1 --config_cnn /src/config/config_cnn_ite
 ## Architecture Summary
 
 This architecture provides a flexible, scalable baseline for fusion plasma prediction tasks with support for heterogeneous multi-modal time-series data. The multi-branch design allows the model to process different types of diagnostic signals (1D time series, 2D profiles, 3D images) simultaneously and produce predictions in various formats matching the physical quantities of interest.
+
+## Companion Resources
+
+| Resource | Link |
+|---|---|
+| TokaMark paper | [arXiv:2602.10132](https://arxiv.org/abs/2602.10132) |
+| TokaMark repository | [UKAEA-IBM-STFC-Fusion-FMs/tokamark](https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark) |
+| TokaMark repository | [UKAEA-IBM-STFC-Fusion-FMs/tokamark](https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark_baseline) |
+
+## Citing TokaMark
+
+TokaMark has been submitted to the *32nd SIGKDD Conference on Knowledge Discovery and Data Mining, 2026*, and it is
+currently being reviewed. A preprint version of the manuscript is available [here](https://arxiv.org/abs/2602.10132).
+
+If you use TokaMark, please cite our work as:
+
+    @article{rousseau2026tokamark,
+      title={TokaMark: A Comprehensive Benchmark for MAST Tokamak Plasma Models},
+      author={
+        Rousseau, C{\'e}cile and Jackson, Samuel and Ordonez-Hurtado, Rodrigo H. and
+        Amorisco, Nicola C. and Boschi, Tobia and Holt, George K and Loreti, Andrea and 
+        Sz{\'e}kely, Eszter and Whittle, Alexander and Agnello, Adriano and Pamela, Stanislas and 
+        Pascale, Alessandra and Akers, Robert and Bernabe Moreno, Juan and Thorne, Sue and 
+        Zayats, Mykhaylo
+      },
+      journal={arXiv preprint arXiv:2602.10132},
+      year={2026}
+    }
