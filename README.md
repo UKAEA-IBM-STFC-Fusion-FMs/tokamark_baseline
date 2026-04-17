@@ -241,7 +241,7 @@ Configuration includes:
 
 ## Dependencies
 
-The system integrates with the **MAST_benchmark** package for:
+The system integrates with the **tokamark** package for:
 - Dataset initialization
 - Task configuration
 - Metric computation

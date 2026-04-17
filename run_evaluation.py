@@ -14,18 +14,18 @@ try:
 except ImportError:
     from .globals import REPO_ROOT
 
-from MAST_benchmark.tools.utils import get_device
-from MAST_benchmark.data_split import get_train_test_val_shots
-from MAST_benchmark.tasks import get_task_config, get_task_metadata
-from MAST_benchmark.tools.transforms.compose_transform import (
+from tokamark.tools.utils import get_device
+from tokamark.data_split import get_train_test_val_shots
+from tokamark.tasks import get_task_config, get_task_metadata
+from tokamark.tools.transforms.compose_transform import (
     ComposeTransforms,
 )
-from MAST_benchmark.data import (
+from tokamark.data import (
     initialize_MAST_dataset, 
     initialize_TokaMark_dataset,
 )
 
-from MAST_benchmark.evaluator import (
+from tokamark.evaluator import (
     WindowMetricsAccumulator,
     compute_metrics,
 )

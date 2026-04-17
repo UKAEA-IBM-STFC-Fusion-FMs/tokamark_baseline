@@ -4,7 +4,7 @@ import torch.nn as nn
 from torchinfo import summary
 from torch.utils.checkpoint import checkpoint
 
-from MAST_benchmark.tools.utils import get_device
+from tokamark.tools.utils import get_device
 
 
 # ----------------------------------------------------------------------------------------------------------------------

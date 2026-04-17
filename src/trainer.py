@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.utils.data._utils.collate import default_collate
 
 # Set device
-from MAST_benchmark.tools.utils import get_device
+from tokamark.tools.utils import get_device
 
 
 # ----------------------------------------------------------------------------------------------------------------------
