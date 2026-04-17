@@ -1,12 +1,12 @@
-subset_of_shots: 8
+subset_of_shots: 10
 local: true
 
-cnn_settings:
+lstm_settings:
   D: 16
 
 dataloader_setting:
-  batch_size: 2
-  num_workers: 4
+  batch_size: 8
+  num_workers: 0
   # batch_size: 64 
   # num_workers: 64
   # shuffle: True 

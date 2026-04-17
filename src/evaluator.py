@@ -4,8 +4,8 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-from MAST_benchmark.tasks import get_task_metadata
-from MAST_benchmark.tools.utils import get_device
+from tokamark.tasks import get_task_metadata
+from tokamark.tools.utils import get_device
 
 
 # ----------------------------------------------------------------------------------------------------------------------

@@ -24,14 +24,15 @@ from tokamark.data import (
     initialize_MAST_dataset, 
     initialize_TokaMark_dataset,
 )
-from src.time_cnn_model import (
-    create_cnn_architecture
+from src.lstm_model import (
+    create_lstm_architecture
 )
-from src.time_cnn_transform import (
-    TimeCNNTransform,
+from src.lstm_transform import (
+    LstmTransform_1,
+    LstmTransform_2,
 )
 from src.trainer import (
-    cnn_collate_fn,
+    lstm_collate_fn,
     BatchStepTrainer,
 )
 
@@ -61,9 +62,9 @@ if __name__ == "__main__":
         help="The name of the task available in the benchmark"
     )
     parser.add_argument(
-        "--config_cnn",
+        "--config_lstm",
         type=str,
-        default="/src/config/config_cnn_test.yaml",
+        default="/src/config_lstm/config_lstm_test.yaml",
         # default="/src/config/config_cnn_iterable_lr_4_work_4.yaml",
         help="Path to the model YAML config file."
     )
@@ -90,9 +91,9 @@ if __name__ == "__main__":
     config_task = get_task_config(task_name=args.task)
 
     # Load CNN YAML config
-    with open(REPO_ROOT + args.config_cnn, "r") as f:
-        config_cnn = yaml.safe_load(f)
-    print(config_cnn)
+    with open(REPO_ROOT + args.config_lstm, "r") as f:
+        config_lstm = yaml.safe_load(f)
+    print(config_lstm)
 
     SEED = args.seed
     set_seed(SEED)
@@ -122,10 +123,10 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------------------------------------------
 
     train_shots_, test_shots_, val_shots_ = get_train_test_val_shots(
-        max_index=config_cnn["subset_of_shots"]
+        max_index=config_lstm["subset_of_shots"]
     )
 
-    local_flag = config_cnn["local"]
+    local_flag = config_lstm["local"]
 
     train_MAST_dataset = initialize_MAST_dataset( 
         config_task=config_task,
@@ -158,7 +159,8 @@ if __name__ == "__main__":
 
     model_specific_transform = ComposeTransforms(
         [
-            TimeCNNTransform(dict_task_metadata | config_task),
+            LstmTransform_1(dict_task_metadata | config_task),
+            LstmTransform_2(dict_task_metadata | config_task),
         ]
     )
 
@@ -174,10 +176,10 @@ if __name__ == "__main__":
     )
     train_dataloader: DataLoader[Any] = DataLoader(
             dataset=train_dataset,
-            collate_fn=cnn_collate_fn,
+            collate_fn=lstm_collate_fn,
             worker_init_fn=seed_worker,
             generator=g,
-            **config_cnn["dataloader_setting"],
+            **config_lstm["dataloader_setting"],
             pin_memory=True,
             drop_last=True
         )
@@ -191,16 +193,17 @@ if __name__ == "__main__":
     )
     val_dataloader = DataLoader(
             dataset=val_dataset,
-            collate_fn=cnn_collate_fn,
+            collate_fn=lstm_collate_fn,
             worker_init_fn=seed_worker,
             generator=g,
-            **config_cnn["dataloader_setting"],
+            **config_lstm["dataloader_setting"],
             pin_memory=True
         )
 
-    cnn_model = create_cnn_architecture(
+    lstm_model = create_lstm_architecture(
         dataloader_=train_dataloader,
-        **config_cnn["cnn_settings"],
+        dict_metadata = dict_task_metadata | config_task,
+        **config_lstm["lstm_settings"],
         verbose=True
     )
 
@@ -208,7 +211,7 @@ if __name__ == "__main__":
     # Training loop
     # ------------------------------------------------------------------------------------------------------------------
 
-    base = config_cnn["paths"]["data_output_directory"]
+    base = config_lstm["paths"]["data_output_directory"]
 
     base_model_dir = (
         REPO_ROOT
@@ -217,10 +220,10 @@ if __name__ == "__main__":
     )
 
     trainer = BatchStepTrainer(
-        model=cnn_model,
+        model=lstm_model,
         train_loader=train_dataloader,
         val_loader=val_dataloader,
-        **config_cnn["training_args"],
+        **config_lstm["training_args"],
         output_dir=base_model_dir,
         device=device,
         validate_every=args.validate_every,  # Validate every 100 batches by default.

@@ -120,12 +120,12 @@ if __name__ == "__main__":
 
     local_flag = config_cnn["local"]
 
-    test_MAST_dataset = initialize_MAST_dataset( 
+    val_MAST_dataset = initialize_MAST_dataset( 
         config_task=config_task,
-        shots_list=test_shots_,
+        shots_list=val_shots_,
         local_flag=local_flag,
         use_std_scaling=True,
-        use_nan_filling=True,
+        use_nan_filling=False,
         return_incomplete_shots=True,
         remove_outliers=True,
         verbose=False
@@ -141,8 +141,8 @@ if __name__ == "__main__":
         ]
     )
     
-    test_dataset = initialize_TokaMark_dataset(
-        dataset=test_MAST_dataset,
+    val_dataset = initialize_TokaMark_dataset(
+        dataset=val_MAST_dataset,
         task_metadata=dict_task_metadata,
         config_metadata=config_task,
         custom_transform=model_specific_transform,
@@ -150,24 +150,18 @@ if __name__ == "__main__":
         shuffle_windows=False
     )
     
-    if test_dataset is None:
+    if val_dataset is None:
         raise ValueError("Failed to initialize test dataset. test_MAST_dataset may be None or invalid.")
     
-    test_dataloader = DataLoader(
-            dataset=test_dataset,
+    val_dataloader = DataLoader(
+            dataset=val_dataset,
             collate_fn=cnn_collate_fn,
             **config_cnn["dataloader_setting"],
             pin_memory=True,
         )    
-    test_dataloader_vizu = DataLoader(
-            dataset=test_dataset,
-            collate_fn=cnn_collate_fn,
-            batch_size=1,
-            num_workers=0,
-        )
 
     cnn_model = create_cnn_architecture(
-        dataloader_=test_dataloader_vizu,
+        dataloader_=val_dataloader,
         **config_cnn["cnn_settings"],
         verbose=True
     )
@@ -189,11 +183,11 @@ if __name__ == "__main__":
     # Evaluation
     # -------------------------------------------------------------------
 
-    results_dir = REPO_ROOT + f"/results_without_sparsity/seed_{SEED}/"
+    results_dir = REPO_ROOT + f"/results_with_sparsity_VAL/seed_{SEED}/"
 
     # cnn_safety_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, base_model_dir, n_shot_to_plot=3)
     accumulator = WindowMetricsAccumulator(args.task)
-    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, base_model_dir, accumulator)
+    cnn_unstd_evaluation_per_shot(val_dataloader, config_task, cnn_model, base_model_dir, accumulator)
     
     compute_metrics(
         task=args.task,

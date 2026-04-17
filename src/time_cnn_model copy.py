@@ -19,6 +19,25 @@ stride = 3
 layers_encoder = 3
 layers_decoder = 3
 
+# ----------------------------------------------------------------------------------------------------------------------
+class WindowingTime(nn.Module):
+    def __init__(self, window_size, stride):
+        super().__init__()
+        self.window_size = window_size
+        self.stride = stride
+
+    def forward(self, x):
+        # x: [B, C, T]
+        B, C, T = x.shape
+
+        x = x.unfold(dimension=2, size=self.window_size, step=self.stride)
+        # [B, C, N, W]
+
+        x = x.permute(0, 2, 1, 3).contiguous()
+        # [B, N, C, W]
+
+        return x
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 def create_cnn_architecture(dataloader_, D, verbose=True):
@@ -124,7 +143,7 @@ class Conv1DEncoder(nn.Module):
         # print('final_channels', final_channels)
 
         self.fc = nn.Linear(
-            final_channels * self.ts_comp,
+            final_channels,
             D
         )
 
@@ -132,7 +151,8 @@ class Conv1DEncoder(nn.Module):
     def forward(self, x):
         for i, layer in enumerate(self.cnn):
             x = layer(x)
-        x = x.flatten(start_dim=1)
+        print(x.shape)
+        # x = x.flatten(start_dim=1)
         x = self.fc(x)
         return x
 
@@ -264,14 +284,10 @@ class Conv2DEncoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
     def forward(self, x):
-        # print('\n in cnn 2D encoder ', x.shape)
         for i, layer in enumerate(self.cnn):
             x = layer(x)
-            # print(f'after cnn {i} ', x.shape)
         x = x.flatten(start_dim=1)
-        # print('after flatten ', x.shape)
         x = self.fc(x)
-        # print('after fc ', x.shape)
         return x
 
 
@@ -514,10 +530,13 @@ class MultiBranchTimeCNNModel(nn.Module):
 
         for shape in input_shapes:
             if len(shape) == 4:  # e.g., (2, T, 15, 17) images evolving in time
+                WindowingTime
                 branch = Conv3DEncoder(shape, D, layers_encoder, kernel_size, stride, padding)
             elif len(shape) == 3:  # e.g., (1, T, 15) profiles evolving in time
+                WindowingTime
                 branch = Conv2DEncoder(shape, D, layers_encoder, kernel_size, stride, padding)
             elif len(shape) == 2:  # e.g., (7, T, ) time series evolving in time
+                WindowingTime
                 branch = Conv1DEncoder(shape, D, layers_encoder, kernel_size, stride, padding)
             else:
                 raise ValueError(f"Unsupported input shape: {shape}")

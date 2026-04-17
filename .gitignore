@@ -133,3 +133,22 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+
+
+
+logs/
+output/
+*.wilkes3
+
+output*/
+results*/
+launch.json
+
+lcfs*/
+organized_csv_sam/
+visualization_outputs/
+
+
+
+
+

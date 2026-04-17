@@ -6,7 +6,7 @@ cnn_settings:
 
 dataloader_setting:
   batch_size: 512
-  num_workers: 4 #16
+  num_workers: 8 #16
   # shuffle: True
 
 training_args:

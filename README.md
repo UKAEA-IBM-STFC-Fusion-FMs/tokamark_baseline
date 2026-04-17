@@ -241,7 +241,7 @@ Configuration includes:
 
 ## Dependencies
 
-The system integrates with the **MAST_benchmark** package for:
+The system integrates with the **tokamark** package for:
 - Dataset initialization
 - Task configuration
 - Metric computation
@@ -262,3 +262,11 @@ python run_evaluation.py --task task_1-1 --config_cnn /src/config/config_cnn_ite
 ## Architecture Summary
 
 This architecture provides a flexible, scalable baseline for fusion plasma prediction tasks with support for heterogeneous multi-modal time-series data. The multi-branch design allows the model to process different types of diagnostic signals (1D time series, 2D profiles, 3D images) simultaneously and produce predictions in various formats matching the physical quantities of interest.
+
+## Companion Resources
+
+| Resource | Link |
+|---|---|
+| TokaMark paper | [arXiv:2602.10132](https://arxiv.org/abs/2602.10132) |
+| TokaMark repository | [UKAEA-IBM-STFC-Fusion-FMs/tokamark](https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark) |
+| TokaMark repository | [UKAEA-IBM-STFC-Fusion-FMs/tokamark](https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark_baseline) |
