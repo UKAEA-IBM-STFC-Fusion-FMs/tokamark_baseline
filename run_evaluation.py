@@ -75,7 +75,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_cnn",
         type=str,
-        default="/src/config/config_cnn_iterable_lr_4_work_4.yaml",
+        default="/src/config/config_cnn_test.yaml",
+        # default="/src/config/config_cnn_iterable_lr_4_work_4.yaml",
         help="Path to the model YAML config file",
     )
     parser.add_argument(
