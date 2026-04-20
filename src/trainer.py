@@ -49,7 +49,7 @@ def lstm_collate_fn(batch, verbose=False):
         (
             item["shot_id"],
             item["window_index"],
-            [np.nan_to_num(np.array(x), nan=0.0) for x in item["input"]],
+            [np.nan_to_num(np.array(x), nan=0.0) for x in item["input"] + item["exogenous"]],
             item["y"]
             # [np.nan_to_num(np.array(y), nan=0.0) for y in item["y"]]
         )

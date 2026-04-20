@@ -41,7 +41,7 @@ from src.trainer import (
 
 # Set device
 device = get_device()
-# print(f"Using device: {device}\n")
+print(f"Using device: {device} and pin_memory is {torch.cuda.is_available()}\n")
 
 
 # ======================================================================================================================
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--task",
         type=str,
-        default="task_1-1",
+        default="task_2-1",
         help="The name of the task available in the benchmark"
     )
     parser.add_argument(
@@ -180,7 +180,7 @@ if __name__ == "__main__":
             worker_init_fn=seed_worker,
             generator=g,
             **config_lstm["dataloader_setting"],
-            pin_memory=True,
+            pin_memory=torch.cuda.is_available(),
             drop_last=True
         )
 
@@ -197,7 +197,7 @@ if __name__ == "__main__":
             worker_init_fn=seed_worker,
             generator=g,
             **config_lstm["dataloader_setting"],
-            pin_memory=True
+            pin_memory=torch.cuda.is_available()
         )
 
     lstm_model = create_lstm_architecture(
