@@ -31,22 +31,37 @@ from tokamark.evaluator import (
 )
 
 
-from src.time_cnn_model import (
-    create_cnn_architecture
+from src.cnn_model_v2 import (
+    create_cnn_v2_architecture
 )
-
-from src.time_cnn_transform import (
-    TimeCNNTransform,
+from src.lstm_model_v3 import (
+    create_lstm_v3_architecture
 )
-
+from src.model_transform import (
+    ModelTransform_1,
+    ModelTransform_2,
+)
 from src.trainer import (
-    cnn_collate_fn,
+    model_collate_fn,
+    BatchStepTrainer,
 )
 
 from src.evaluator import (
     # cnn_safety_vizu_per_shot,
     cnn_unstd_evaluation_per_shot,
 )
+
+from tokamark.tools.path import (
+    RANDOM_SPLIT_TOKAMARK_DATA_SPLITS_FILE, 
+    RANDOM_SPLIT_SIGNALS_STATS_FILE,
+    TEMPORAL_SPLIT_TOKAMARK_DATA_SPLITS_FILE, 
+    TEMPORAL_SPLIT_SIGNALS_STATS_FILE
+    )
+
+from MAST_tools.utils.path_utils import (
+    RANDOM_SPLIT_OUTLIER_METADATA_FILE,
+    TEMPORAL_SPLIT_OUTLIER_METADATA_FILE,
+    )
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -73,10 +88,9 @@ if __name__ == "__main__":
         help="The name of the task available in the benchmark",
     )
     parser.add_argument(
-        "--config_cnn",
+        "--config",
         type=str,
-        default="/src/config/config_cnn_iterable_lr_4_work_4.yaml",
-        # default="/src/config/config_cnn_test.yaml",
+        default="/src/config/config_model_test.yaml",
         help="Path to the model YAML config file",
     )
     parser.add_argument(
@@ -84,6 +98,18 @@ if __name__ == "__main__":
         type=int,
         default=23,
         help="Specified seed"
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="cnn",
+        help="Model type to train."
+    )
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="random",
+        help="Splitting used."
     )
     args, _ = parser.parse_known_args()
 
@@ -95,8 +121,8 @@ if __name__ == "__main__":
     config_task = get_task_config(task_name=args.task)
 
     # Load CNN YAML config
-    with open(REPO_ROOT + args.config_cnn, "r") as f:
-        config_cnn = yaml.safe_load(f)
+    with open(REPO_ROOT + args.config, "r") as f:
+        config = yaml.safe_load(f)
     
     SEED = args.seed
     print(SEED)
@@ -111,33 +137,58 @@ if __name__ == "__main__":
     )
 
     # ------------------------------------------------------------------------------------------------------------------
+    # Load correct settings
+    # ------------------------------------------------------------------------------------------------------------------
+
+    if args.split == 'random':
+
+        DATA_SPLIT = RANDOM_SPLIT_TOKAMARK_DATA_SPLITS_FILE
+        OUTLIER_FILE = RANDOM_SPLIT_OUTLIER_METADATA_FILE
+        SIGNAL_STATS = RANDOM_SPLIT_SIGNALS_STATS_FILE
+
+    elif args.split == 'temporal':
+
+        DATA_SPLIT = TEMPORAL_SPLIT_TOKAMARK_DATA_SPLITS_FILE
+        OUTLIER_FILE = TEMPORAL_SPLIT_OUTLIER_METADATA_FILE
+        SIGNAL_STATS = TEMPORAL_SPLIT_SIGNALS_STATS_FILE
+    
+    else:
+        print('SPLIT UNKNOWN')
+
+    # ------------------------------------------------------------------------------------------------------------------
     # Initialize MAST datasets
     # ------------------------------------------------------------------------------------------------------------------
 
     train_shots_, test_shots_, val_shots_ = get_train_test_val_shots(
-        max_index=config_cnn["subset_of_shots"]
+        max_index=config["subset_of_shots"],        
+        shuffle=True,
+        data_splits_file_path = DATA_SPLIT,
     )
 
-    local_flag = config_cnn["local"]
+    local_flag = config["local"]
 
     test_MAST_dataset = initialize_MAST_dataset( 
         config_task=config_task,
         shots_list=test_shots_,
         local_flag=local_flag,
         use_std_scaling=True,
+        stats_metadata_file_path=SIGNAL_STATS,
         use_nan_filling=False,
         return_incomplete_shots=True,
         remove_outliers=True,
+        outlier_metadata_file=OUTLIER_FILE,
+        remove_bad_efit_rating=True,
         verbose=False
     )
 
     # ------------------------------------------------------------------------------------------------------------------
     # CNN pipeline
     # ------------------------------------------------------------------------------------------------------------------
-
+    
     model_specific_transform = ComposeTransforms(
         [
-            TimeCNNTransform(dict_task_metadata | config_task),
+            ModelTransform_1(dict_task_metadata | config_task),
+            ModelTransform_2(dict_task_metadata | config_task),
         ]
     )
     
@@ -155,45 +206,60 @@ if __name__ == "__main__":
     
     test_dataloader = DataLoader(
             dataset=test_dataset,
-            collate_fn=cnn_collate_fn,
-            **config_cnn["dataloader_setting"],
+            collate_fn=model_collate_fn,
+            **config["dataloader_setting"],
             pin_memory=True,
         )    
     test_dataloader_vizu = DataLoader(
             dataset=test_dataset,
-            collate_fn=cnn_collate_fn,
+            collate_fn=model_collate_fn,
             batch_size=1,
             num_workers=0,
         )
+    # ------------------------------------------------------------------------------------------------------------------
+    # Initialize Model
+    # ------------------------------------------------------------------------------------------------------------------
 
-    cnn_model = create_cnn_architecture(
-        dataloader_=test_dataloader_vizu,
-        **config_cnn["cnn_settings"],
-        verbose=True
-    )
+    if args.model == 'cnn':
+
+        model = create_cnn_v2_architecture(
+            dataloader_=test_dataloader,
+            dict_metadata = dict_task_metadata | config_task,
+            verbose=True
+        )
+
+    elif args.model == 'lstm':
+
+        model = create_lstm_v3_architecture(
+            dataloader_=test_dataloader,
+            dict_metadata = dict_task_metadata | config_task,
+            verbose=True
+        )
+    
+    else:
+        print('MODEL UNKNOWN')
 
     # -------------------------------------------------------------------
     # Training loop
     # -------------------------------------------------------------------
 
-    base = config_cnn["paths"]["data_output_directory"]
+    base = config["paths"]["data_output_directory"]
 
-    print(config_cnn)
     base_model_dir = (
         REPO_ROOT
         + base
-        + f"/{config_task['task_name']}/seed_{SEED}/"
+        + f"/{args.split}/{args.model}/{config_task['task_name']}/seed_{SEED}/"
     )
 
     # -------------------------------------------------------------------
     # Evaluation
     # -------------------------------------------------------------------
 
-    results_dir = REPO_ROOT + f"/results_with_sparsity/seed_{SEED}/"
+    results_dir = REPO_ROOT + f"/results/{args.split}/{args.model}/seed_{SEED}/"
 
     # cnn_safety_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, base_model_dir, n_shot_to_plot=3)
     accumulator = WindowMetricsAccumulator(args.task)
-    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, cnn_model, base_model_dir, accumulator)
+    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, model, base_model_dir, accumulator)
     
     compute_metrics(
         task=args.task,

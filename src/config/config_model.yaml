@@ -1,9 +1,6 @@
 subset_of_shots: 
 local: true
 
-lstm_settings:
-  D: 16
-
 dataloader_setting:
   batch_size: 512
   num_workers: 8 #16
@@ -16,4 +13,4 @@ training_args:
   patience: 10
 
 paths:
-  data_output_directory: /output_LSTM_without_sparsity/model_iterable_lr_4_batch_512
+  data_output_directory: /output

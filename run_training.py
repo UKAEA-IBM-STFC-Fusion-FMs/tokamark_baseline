@@ -40,7 +40,7 @@ from src.trainer import (
 
 # Set device
 device = get_device()
-# print(f"Using device: {device}\n")
+# print(f"Using device: {device} and pin_memory is {torch.cuda.is_available()}\n")
 
 
 # ======================================================================================================================
@@ -112,6 +112,32 @@ if __name__ == "__main__":
         config_task["stride_window"] = 0.005
         shuffle_buffer_size = 2048
 
+    if args.task in [
+        "task_1-1",
+        "task_1-2", 
+        "task_1-3",
+        "task_2-1",
+        "task_2-2", 
+        "task_2-3",        
+        "task_3-1",
+        "task_3-2", 
+        "task_3-3",
+        "task_4-3"
+        ]:
+        config_cnn['dataloader_setting']['num_workers'] = 8
+    
+    elif args.task in [
+        "task_4-1",
+        "task_4-2", 
+        "task_4-4", 
+        "task_4-5"]:
+        config_cnn['dataloader_setting']['num_workers'] = 4
+
+    else:
+        print('Task not known!')
+
+    print('num worker to ', config_cnn['dataloader_setting']['num_workers'])
+
     dict_task_metadata = get_task_metadata(
         config_task=config_task,
         verbose=False
@@ -132,8 +158,7 @@ if __name__ == "__main__":
         shots_list=train_shots_,
         local_flag=local_flag,
         use_std_scaling=True,
-        # use_nan_filling=False,
-        use_nan_filling=True,
+        use_nan_filling=False,
         return_incomplete_shots=True,
         remove_outliers=True,
         remove_bad_efit_rating=True,
@@ -144,8 +169,7 @@ if __name__ == "__main__":
         shots_list=val_shots_,
         local_flag=local_flag,
         use_std_scaling=True,
-        # use_nan_filling=False,
-        use_nan_filling=True,
+        use_nan_filling=False,
         return_incomplete_shots=True,
         remove_outliers=True,
         remove_bad_efit_rating=True,

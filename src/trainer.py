@@ -64,6 +64,28 @@ def lstm_collate_fn(batch, verbose=False):
     return default_collate(full_flattened_batch) if (len(full_flattened_batch) > 0) else None
 
 # ----------------------------------------------------------------------------------------------------------------------
+def model_collate_fn(batch, verbose=False):
+
+    # print('in collate model')
+    full_flattened_batch = [
+        (
+            item["shot_id"],
+            item["window_index"],
+            [np.nan_to_num(np.array(x), nan=0.0) for x in item["input"] + item["exogenous"]],
+            item["y"]
+            # [np.nan_to_num(np.array(y), nan=0.0) for y in item["y"]]
+        )
+        for item in batch
+    ]
+
+    if verbose:
+        print(
+            f"Collating batch of size = {len(batch)} shots to N = {len(full_flattened_batch)}"
+        )
+
+    return default_collate(full_flattened_batch) if (len(full_flattened_batch) > 0) else None
+
+# ----------------------------------------------------------------------------------------------------------------------
 # CNN LOSS
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -210,112 +232,6 @@ def validate(model, loader, criterion, device, count_stats=False, return_stats=F
     return avg_loss
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# def train_loop(  # NOSONAR - Ignore cognitive complexity
-#     model,
-#     train_loader,
-#     val_loader,
-#     lr,
-#     max_epochs,
-#     patience,
-#     output_dir,
-#     verbose=True,
-# ):
-
-#     os.makedirs(output_dir, exist_ok=True)
-#     history_file = os.path.join(output_dir, "training_history.pt")
-
-#     if verbose:
-#         print(f"Output folder to save trained model: {output_dir}")
-
-#     # Load previous history if it exists
-#     if os.path.exists(history_file):
-#         history = torch.load(history_file)
-#         if verbose:
-#             print("Loaded previous training history.")
-#     else:
-#         history = {"train_loss": [], "val_loss": []}
-
-#     optimizer = torch.optim.Adam(
-#         model.parameters(),
-#         lr=lr,
-#         weight_decay=1e-4,
-#     )
-#     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
-
-#     criterion = MultiOutputMSELoss()
-
-#     best_val_loss = float("inf")
-#     epochs_no_improve = 0
-
-#     for epoch in range(max_epochs):
-#         model.train()
-
-#         running_loss = 0.0
-#         total_samples = 0
-        
-#         # Track unique shots in first epoch
-#         train_unique_shots = set() if epoch == 0 else None
-
-#         for batch in train_loader:
-#             if batch is None:
-#                 continue
-            
-#             # Count unique shots in first epoch
-#             if epoch == 0 and train_unique_shots is not None:
-#                 shot_ids, _, _, _ = batch
-#                 train_unique_shots.update(shot_ids.cpu().numpy())
-
-#             loss, bs = train_step(
-#                 model,
-#                 batch,
-#                 optimizer,
-#                 criterion,
-#                 device,
-#             )
-
-#             running_loss += loss * bs
-#             total_samples += bs
-
-#         train_loss = running_loss / total_samples
-        
-#         # Print statistics for first epoch
-#         if epoch == 0 and train_unique_shots is not None:
-#             print(f"\n{'='*60}")
-#             print(f"FIRST EPOCH STATISTICS:")
-#             print(f"{'='*60}")
-#             print(f"Train - Total samples: {total_samples}")
-#             print(f"Train - Unique shots: {len(train_unique_shots)}")
-#             print(f"{'='*60}\n")
-        
-#         val_loss = validate(model, val_loader, criterion, device, count_stats=(epoch == 0))
-#         scheduler.step()
-
-#         # Append to history
-#         history["train_loss"].append(train_loss)
-#         history["val_loss"].append(val_loss)
-#         torch.save(history, history_file)  # Save after every epoch
-
-#         if verbose:
-#             print(
-#                 f"Epoch {epoch+1}/{max_epochs} | "
-#                 f"train={train_loss:.4f} | val={val_loss:.4f}"
-#             )
-
-#         # Early stopping
-#         if val_loss < best_val_loss:
-#             best_val_loss = val_loss
-#             epochs_no_improve = 0
-#             torch.save(model.state_dict(), os.path.join(output_dir, "best_model.pt"))
-#         else:
-#             epochs_no_improve += 1
-#             if epochs_no_improve >= patience:
-#                 if verbose:
-#                     print("Early stopping triggered.")
-#                 break
-
-#     return history
-
 
 # ======================================================================================================================
 class BatchStepTrainer:
@@ -367,7 +283,7 @@ class BatchStepTrainer:
         self.batch_iter = iter(self.train_loader)
         
         # Track statistics for first epoch
-        self.first_epoch_stats_printed = True
+        self.first_epoch_stats_printed = False
         self.train_unique_shots = set()
         self.train_sample_count = 0
         self.epoch_count = 0

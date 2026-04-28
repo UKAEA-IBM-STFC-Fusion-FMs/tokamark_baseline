@@ -1,12 +1,13 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np 
 from torch.utils.checkpoint import checkpoint
 from torchinfo import summary
 
-from src.lstm_transform import _resample
-from src.time_cnn_model import Conv1DEncoder, Conv2DEncoder, Conv3DEncoder, Conv1DDecoder, Conv2DDecoder, Conv3DDecoder
+from src.model_transform import _resample
+from src.conv_encoders_decoders import Conv1DEncoder, Conv2DEncoder, Conv3DEncoder, Conv1DDecoder, Conv2DDecoder, Conv3DDecoder
 from tokamark.tools.utils import get_device
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -19,13 +20,13 @@ kernel_size = 3
 stride = 3
 layers_encoder = 3
 layers_decoder = 3
+bb_factor = 2
 
 # ----------------------------------------------------------------------------------------------------------------------
-def create_lstm_architecture(dataloader_, D, dict_metadata, verbose=True,
-                             num_window=32, stride=16):
+def create_cnn_v2_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
     
     if verbose:
-        print("\n\n----------LSTM MODEL INITIALIZATION----------\n")
+        print("\n\n----------CNN v2 MODEL INITIALIZATION----------\n")
 
     # ------------------------------------------------------------
     # 1. Extract one valid sample for shape inference
@@ -54,7 +55,7 @@ def create_lstm_architecture(dataloader_, D, dict_metadata, verbose=True,
     # ------------------------------------------------------------
     # 2. Create model (your CNN + Window + LSTM model)
     # ------------------------------------------------------------
-    model = LstmModel(
+    model = CNN_v2(
         input_shapes,
         exogenous_shapes,
         output_shapes,
@@ -85,11 +86,12 @@ import numpy as np
 
 def make_dummy_outputs(output_shapes, dict_metadata):
 
-    lstm_dt = max(
-        dict_metadata[section][var]['dt']
-        for section in ['input', 'actuator', 'output']
-        for var in dict_metadata[section]
-    )
+    # lstm_dt = max(
+    #     dict_metadata[section][var]['dt']
+    #     for section in ['input', 'actuator', 'output']
+    #     for var in dict_metadata[section]
+    # )
+    lstm_dt = 0.005
 
     shot_section = {}
 
@@ -110,13 +112,14 @@ def make_dummy_outputs(output_shapes, dict_metadata):
             "values": values
         }
     
-    y = _resample(shot_section, dict_metadata['output'], lstm_dt)
+    n_window = int(dict_metadata['task_window_segmenter']['output_length'] / lstm_dt)
+    y = _resample(shot_section, n_window)
     y = [np.expand_dims(arr, axis=1) for arr in y]
 
     return y
 
 # ======================================================================================================================
-class LstmModel(nn.Module):
+class CNN_v2(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, 
@@ -130,66 +133,7 @@ class LstmModel(nn.Module):
         super().__init__()
 
         self.D = D
-
-        
-
-        # --------------------------------------------------------------------------------------------------------------
-        self.input_branches = nn.ModuleList()
-
-        for var_shape in input_shapes:
-            if len(var_shape) == 5:  # e.g., (2, T, 15, 17) images evolving in time
-                branch = Conv3DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding)
-            elif len(var_shape) == 4:  # e.g., (1, T, 15) profiles evolving in time
-                branch = Conv2DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding)
-            elif len(var_shape) == 3:  # e.g., (7, T, ) time series evolving in time
-                branch = Conv1DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding)
-            else:
-                raise ValueError(f"Unsupported input shape: {var_shape[1:]}")
-            self.input_branches.append(branch)
-
-        # --------------------------------------------------------------------------------------------------------------
-        self.backbone = nn.Sequential(
-            nn.Dropout(0.2),
-            nn.Linear(self.D*len(self.input_branches), 4*self.D),
-            nn.ReLU(),
-            nn.Linear(4*self.D, 2*self.D),
-            nn.ReLU(),
-            nn.Linear(2*self.D, self.D),
-            nn.ReLU(),
-            )
-
-        self.encoder_lstm = nn.LSTM(
-            input_size=self.D * len(self.input_branches),
-            hidden_size=self.D,  # ✓ Keep at D
-            num_layers=2,
-            batch_first=True,
-            dropout=0.2
-        )
-
-        self.decoder_lstm = nn.LSTM(
-            input_size=self.D * (1 + len(exogenous_shapes)),  # ✓ Accept concatenated input
-            hidden_size=self.D,  # ✓ Keep at D (matches encoder)
-            num_layers=2,
-            batch_first=True,
-            dropout=0.2
-        )
-
-        # --------------------------------------------------------------------------------------------------------------
-        self.exogenous_branches = nn.ModuleList()
-
-        for var_shape in exogenous_shapes:
-            if len(var_shape) == 5:  # e.g., (2, T, 15, 17) images evolving in time
-                branch = Conv3DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding)
-            elif len(var_shape) == 4:  # e.g., (1, T, 15) profiles evolving in time
-                branch = Conv2DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding)
-            elif len(var_shape) == 3:  # e.g., (7, T, ) time series evolving in time
-                branch = Conv1DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding)
-            else:
-                raise ValueError(f"Unsupported input shape: {var_shape[1:]}")
-            self.exogenous_branches.append(branch)
-
-        # --------------------------------------------------------------------------------------------------------------
-        self.output_branches = nn.ModuleList()
+        self.W_in = input_shapes[0][0]
 
         self.output_shapes = output_shapes
         y = make_dummy_outputs(output_shapes, dict_metadata)
@@ -197,14 +141,84 @@ class LstmModel(nn.Module):
         print(output_latent_shapes)
         self.W_out = output_latent_shapes[0][0]
 
+        # --------------------------------------------------------------------------------------------------------------
+        self.input_branches = nn.ModuleList()
+
+        for var_shape in input_shapes:
+            if len(var_shape) == 5:  # e.g., (2, T, 15, 17) images evolving in time
+                branch = Conv3DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding, bb_factor)
+            elif len(var_shape) == 4:  # e.g., (1, T, 15) profiles evolving in time
+                branch = Conv2DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding, bb_factor)
+            elif len(var_shape) == 3:  # e.g., (7, T, ) time series evolving in time
+                branch = Conv1DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding, bb_factor)
+            else:
+                raise ValueError(f"Unsupported input shape: {var_shape[1:]}")
+            self.input_branches.append(branch)
+
+        # --------------------------------------------------------------------------------------------------------------
+        # self.backbone = nn.Sequential(
+        #     nn.Dropout(0.2),
+        #     nn.Linear(self.D*len(self.input_branches), 4*self.D),
+        #     nn.ReLU(),
+        #     nn.Linear(4*self.D, 2*self.D),
+        #     nn.ReLU(),
+        #     nn.Linear(2*self.D, self.D),
+        #     nn.ReLU(),
+        #     )
+
+        # self.encoder_lstm = nn.LSTM(
+        #     input_size=self.D * bb_factor * len(self.input_branches),
+        #     hidden_size=self.D * bb_factor,  # ✓ Keep at D
+        #     num_layers=layers_encoder,
+        #     batch_first=True,
+        #     dropout=0.2
+        # )
+
+        # self.decoder_lstm = nn.LSTM(
+        #     input_size=self.D * bb_factor * (1 + len(exogenous_shapes)),  # ✓ Accept concatenated input
+        #     hidden_size=self.D * bb_factor,  # ✓ Keep at D (matches encoder)
+        #     num_layers=layers_decoder,
+        #     batch_first=True,
+        #     dropout=0.2
+        # )
+
+        self.encoder_mlp = nn.Sequential(
+            nn.Linear(self.D * bb_factor * len(self.input_branches) * self.W_in, 2 * self.D * bb_factor),
+            nn.ReLU(),
+            nn.Linear(2 * self.D * bb_factor, self.D * bb_factor),
+        )
+
+        self.decoder_mlp = nn.Sequential(
+            nn.Linear(self.D * bb_factor * (1 + len(exogenous_shapes) * self.W_out ) , 2 * self.D * bb_factor),
+            nn.ReLU(),
+            nn.Linear(2 * self.D * bb_factor, self.D * bb_factor),
+        )
+
+        # --------------------------------------------------------------------------------------------------------------
+        self.exogenous_branches = nn.ModuleList()
+
+        for var_shape in exogenous_shapes:
+            if len(var_shape) == 5:  # e.g., (2, T, 15, 17) images evolving in time
+                branch = Conv3DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding, bb_factor)
+            elif len(var_shape) == 4:  # e.g., (1, T, 15) profiles evolving in time
+                branch = Conv2DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding, bb_factor)
+            elif len(var_shape) == 3:  # e.g., (7, T, ) time series evolving in time
+                branch = Conv1DEncoder(var_shape[1:], D, layers_encoder, kernel_size, stride, padding, bb_factor)
+            else:
+                raise ValueError(f"Unsupported input shape: {var_shape[1:]}")
+            self.exogenous_branches.append(branch)
+
+        # --------------------------------------------------------------------------------------------------------------
+        self.output_branches = nn.ModuleList()
+
         for var_shape in output_latent_shapes:
 
             if len(var_shape) == 5:
-                branch = Conv3DDecoder(var_shape[1:], D,  layers_decoder, kernel_size, stride, padding)
+                branch = Conv3DDecoder(var_shape[1:], D,  layers_decoder, kernel_size, stride, padding, bb_factor)
             elif len(var_shape) == 4:
-                branch = Conv2DDecoder(var_shape[1:], D, layers_decoder, kernel_size, stride, padding)
+                branch = Conv2DDecoder(var_shape[1:], D, layers_decoder, kernel_size, stride, padding, bb_factor)
             elif len(var_shape) == 3:
-                branch = Conv1DDecoder(var_shape[1:], D, layers_decoder, kernel_size, stride, padding)
+                branch = Conv1DDecoder(var_shape[1:], D, layers_decoder, kernel_size, stride, padding, bb_factor)
             else:
                 raise ValueError(f"Unsupported input shape: {var_shape[1:]}")
             self.output_branches.append(branch)
@@ -230,20 +244,33 @@ class LstmModel(nn.Module):
     # ------------------------------------------------------------------------------------------------------------------
     def _run_cnn_decoder(self, branch, goal_shape, x):
 
-        # print('shape reshape decoder', x.shape)
-        B, W = x.shape[:2]  # batch, num_windows
+        B, W = x.shape[:2]
+
+        # merge batch + windows for CNN
         x = x.reshape(B * W, *x.shape[2:])
-        # print('before cnn decoder', x.shape)
+
         out = branch(x)
+
         # print('after cnn decoder', out.shape)
-        # print('but goal shape is ', goal_shape)
+        # print('but goal shape is', goal_shape)
+
+        # restore batch structure
         out = out.reshape(B, W * out.shape[2], *out.shape[3:])
-        # print('after batch reshape ', out.shape)
+        # print('after batch reshape', out.shape)
+
+        target_len = goal_shape[0]
+
+        out = out[:, -target_len:]
 
         return out
 
     # ------------------------------------------------------------------------------------------------------------------
     def forward(self, *args):
+
+        
+        # -----------------------------
+        # CNN ENCODER
+        # -----------------------------
 
         n_in = len(self.input_branches)
         n_exo = len(self.exogenous_branches)
@@ -276,29 +303,38 @@ class LstmModel(nn.Module):
             exo_seq = None
 
         # -----------------------------
-        # encoder
+        # BACKBONE (MLP VERSION)
         # -----------------------------
-        enc_out, (h, c) = self.encoder_lstm(input_seq)
+
+        B, W_in, D_in = input_seq.shape
 
         # -----------------------------
-        # decoder conditioning
+        # ENCODER MLP
         # -----------------------------
-        context = enc_out[:, -1:, :]
-        context_seq = context.repeat(1, self.W_out, 1)
+        enc_in = input_seq.reshape(B, W_in * D_in)
 
+        context = self.encoder_mlp(enc_in)   # (B, D)
+
+        # -----------------------------
+        # DECODER INPUT PREP
+        # -----------------------------
         if exo_seq is not None:
-            # print('THERE IS EXOGENOUS')
-            # print(context_seq.shape)
-            # print(exo_seq.shape)
-            decoder_input = torch.cat([context_seq, exo_seq], dim=2)
-            # print(decoder_input.shape)
+            B, W_out, D_exo = exo_seq.shape
+            exo = exo_seq.reshape(B, W_out * D_exo)
+            decoder_in = torch.cat([context, exo], dim=1) #SAHPE HERE IS D (1 + W_out_D_exo)
         else:
-            decoder_input = context_seq
+            decoder_in = context
+
+        dec_flat = self.decoder_mlp(decoder_in)  # (B, D)
 
         # -----------------------------
-        # decoder
+        # EXPAND TO TIME DIM
         # -----------------------------
-        dec_out, _ = self.decoder_lstm(decoder_input, (h, c))
+        dec_out = dec_flat.unsqueeze(1).repeat(1, self.W_out, 1)
+
+        # -----------------------------
+        # CNN DECODERS
+        # -----------------------------
 
         # -----------------------------
         # output heads

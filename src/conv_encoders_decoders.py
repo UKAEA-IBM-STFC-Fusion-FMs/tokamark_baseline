@@ -1,8 +1,5 @@
-import numpy as np
-import torch
 import torch.nn as nn
-from torchinfo import summary
-from torch.utils.checkpoint import checkpoint
+import numpy as np
 
 from tokamark.tools.utils import get_device
 
@@ -18,60 +15,7 @@ kernel_size = 3
 stride = 3
 layers_encoder = 3
 layers_decoder = 3
-
-# ----------------------------------------------------------------------------------------------------------------------
-class WindowingTime(nn.Module):
-    def __init__(self, window_size, stride):
-        super().__init__()
-        self.window_size = window_size
-        self.stride = stride
-
-    def forward(self, x):
-        # x: [B, C, T]
-        B, C, T = x.shape
-
-        x = x.unfold(dimension=2, size=self.window_size, step=self.stride)
-        # [B, C, N, W]
-
-        x = x.permute(0, 2, 1, 3).contiguous()
-        # [B, N, C, W]
-
-        return x
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-def create_cnn_architecture(dataloader_, D, verbose=True):
-
-    if verbose:
-        print("\n\n----------CNN MODEL INITIALIZATION----------\n")
-
-    for l, first_window in enumerate(dataloader_.dataset):
-        print(l)
-        print(first_window['shot_id'])
-        try:
-
-            input_shapes = [arr.shape for arr in first_window["x"]]
-            output_shape = [arr.shape for arr in first_window["y"]]
-
-            if verbose:
-                print(f"Shot {first_window['shot_id']} used as reference")
-                print(f"Input shapes are: {input_shapes}")
-                print(f"Output shape are: {output_shape}")
-
-            break  # stop after first successful shot
-
-        except Exception as e:
-            print(
-                f"Skipping sample {l} because not trainable: {e}"
-            )
-            continue
-
-    cnn_model = MultiBranchTimeCNNModel(input_shapes, output_shape, D).to(device)
-
-    input_size = [ (2,) + shape for shape in input_shapes ]
-    summary(cnn_model, input_size=input_size)
-
-    return cnn_model
+bb_factor = 2
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -94,12 +38,11 @@ def compute_list_compressed_size_decoder(L_out, layers, kernel_size, stride, pad
         list_L.append(L)
     return list_L[::-1]
 
-
 # ======================================================================================================================
 class Conv1DEncoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, input_shape, D, layers, kernel_size, stride, padding):
+    def __init__(self, input_shape, D, layers, kernel_size, stride, padding, bb_factor=3):
         super().__init__()
 
         self.D = D
@@ -143,16 +86,15 @@ class Conv1DEncoder(nn.Module):
         # print('final_channels', final_channels)
 
         self.fc = nn.Linear(
-            final_channels,
-            D
+            final_channels * self.ts_comp,
+            D * bb_factor
         )
 
     # ------------------------------------------------------------------------------------------------------------------
     def forward(self, x):
         for i, layer in enumerate(self.cnn):
             x = layer(x)
-        print(x.shape)
-        # x = x.flatten(start_dim=1)
+        x = x.flatten(start_dim=1)
         x = self.fc(x)
         return x
 
@@ -161,7 +103,7 @@ class Conv1DEncoder(nn.Module):
 class Conv1DDecoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, output_shape, D, layers=2, kernel_size=3, stride=2, padding=1, output_padding=1):
+    def __init__(self, output_shape, D, layers=2, kernel_size=3, stride=2, padding=1, bb_factor=3, output_padding=1):
 
         super().__init__()
 
@@ -177,7 +119,7 @@ class Conv1DDecoder(nn.Module):
         # final encoder channels
         final_channels = D * (2 ** (layers - 1))
 
-        self.fc = nn.Linear(D, final_channels * self.list_ts_comp[0])
+        self.fc = nn.Linear(D * bb_factor, final_channels * self.list_ts_comp[0])
 
         modules = []
         in_channels = final_channels
@@ -231,7 +173,7 @@ class Conv1DDecoder(nn.Module):
 class Conv2DEncoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, input_shape, D, layers=2, kernel_size=3, stride=2, padding=1):
+    def __init__(self, input_shape, D, layers=2, kernel_size=3, stride=2, padding=1, bb_factor=3):
 
         super().__init__()
 
@@ -279,15 +221,19 @@ class Conv2DEncoder(nn.Module):
 
         self.fc = nn.Linear(
             final_channels * self.ts_comp * self.height_comp,
-            D
+            D * bb_factor
         )
 
     # ------------------------------------------------------------------------------------------------------------------
     def forward(self, x):
+        # print('\n in cnn 2D encoder ', x.shape)
         for i, layer in enumerate(self.cnn):
             x = layer(x)
+            # print(f'after cnn {i} ', x.shape)
         x = x.flatten(start_dim=1)
+        # print('after flatten ', x.shape)
         x = self.fc(x)
+        # print('after fc ', x.shape)
         return x
 
 
@@ -295,7 +241,7 @@ class Conv2DEncoder(nn.Module):
 class Conv2DDecoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, output_shape, D, layers, kernel_size, stride, padding, output_padding=1):
+    def __init__(self, output_shape, D, layers, kernel_size, stride, padding, bb_factor=3, output_padding=1):
 
         super().__init__()
 
@@ -316,7 +262,7 @@ class Conv2DDecoder(nn.Module):
         # final encoder channels
         final_channels = D * (2 ** (layers - 1))
 
-        self.fc = nn.Linear(D, final_channels * self.list_ts_comp[0] * self.list_height_comp[0])
+        self.fc = nn.Linear(D * bb_factor, final_channels * self.list_ts_comp[0] * self.list_height_comp[0])
 
         modules = []
         in_channels = final_channels
@@ -369,7 +315,7 @@ class Conv2DDecoder(nn.Module):
 class Conv3DEncoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, input_shape, D, layers, kernel_size, stride, padding):
+    def __init__(self, input_shape, D, layers, kernel_size, stride, padding, bb_factor=3):
 
         super().__init__()
 
@@ -421,7 +367,7 @@ class Conv3DEncoder(nn.Module):
 
         self.fc = nn.Linear(
             final_channels * self.ts_comp * self.height_comp * self.weight_comp,
-            D
+            D * bb_factor
         )
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -438,7 +384,7 @@ class Conv3DEncoder(nn.Module):
 class Conv3DDecoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, output_shape, D, layers, kernel_size, stride, padding, output_padding=1):
+    def __init__(self, output_shape, D, layers, kernel_size, stride, padding, bb_factor=3, output_padding=1):
 
         super().__init__()
 
@@ -464,7 +410,7 @@ class Conv3DDecoder(nn.Module):
         # final encoder channels
         final_channels = D * (2 ** (layers - 1))
 
-        self.fc = nn.Linear(D, final_channels * self.list_ts_comp[0] * self.list_height_comp[0] * self.list_weight_comp[0])
+        self.fc = nn.Linear(D * bb_factor, final_channels * self.list_ts_comp[0] * self.list_height_comp[0] * self.list_weight_comp[0])
 
         modules = []
         in_channels = final_channels
@@ -517,79 +463,3 @@ class Conv3DDecoder(nn.Module):
 
         return x
 
-
-# ======================================================================================================================
-class MultiBranchTimeCNNModel(nn.Module):
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, input_shapes, output_shapes, D=16):
-        super().__init__()
-
-        self.D = D
-        self.input_branches = nn.ModuleList()
-
-        for shape in input_shapes:
-            if len(shape) == 4:  # e.g., (2, T, 15, 17) images evolving in time
-                WindowingTime
-                branch = Conv3DEncoder(shape, D, layers_encoder, kernel_size, stride, padding)
-            elif len(shape) == 3:  # e.g., (1, T, 15) profiles evolving in time
-                WindowingTime
-                branch = Conv2DEncoder(shape, D, layers_encoder, kernel_size, stride, padding)
-            elif len(shape) == 2:  # e.g., (7, T, ) time series evolving in time
-                WindowingTime
-                branch = Conv1DEncoder(shape, D, layers_encoder, kernel_size, stride, padding)
-            else:
-                raise ValueError(f"Unsupported input shape: {shape}")
-            self.input_branches.append(branch)
-        
-        self.backbone = nn.Sequential(
-            nn.Dropout(0.2),
-            nn.Linear(self.D*len(self.input_branches), 4*self.D),
-            nn.ReLU(),
-            nn.Linear(4*self.D, 2*self.D),
-            nn.ReLU(),
-            nn.Linear(2*self.D, self.D),
-            nn.ReLU(),
-        )
-        
-        self.output_branches = nn.ModuleList()
-
-        for var_shape in output_shapes:
-            if len(var_shape) == 4:
-                branch = Conv3DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
-            elif len(var_shape) == 3:
-                branch = Conv2DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
-            elif len(var_shape) == 2:
-                branch = Conv1DDecoder(var_shape, D, layers_decoder, kernel_size, stride, padding)
-            else:
-                raise ValueError(f"Unsupported input shape: {var_shape}")
-            self.output_branches.append(branch)
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def _run_encoder(self, branch, x):
-        return branch(x)
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def _run_decoder(self, branch, x):
-        return branch(x)
-
-    # ------------------------------------------------------------------------------------------------------------------
-    def forward(self, *inputs):
-        branch_outputs = []
-
-        for branch, x in zip(self.input_branches, inputs):
-            out = checkpoint(self._run_encoder, branch, x, use_reentrant=False)
-            branch_outputs.append(out)
-
-        merged = torch.cat(branch_outputs, dim=1)
-
-        # checkpoint backbone
-        merged = checkpoint(self.backbone, merged, use_reentrant=False)
-
-        decoded_representation = []
-
-        for branch in self.output_branches:
-            out = checkpoint(self._run_decoder, branch, merged, use_reentrant=False)
-            decoded_representation.append(out)
-
-        return decoded_representation

@@ -1,0 +1,15 @@
+task,cnn_random,lstm_random,cnn_temporal,lstm_temporal,cnn_random_vs_lstm_random,cnn_temporal_vs_lstm_temporal,cnn_random_vs_cnn_temporal,lstm_random_vs_lstm_temporal
+task_1-1,"(56650, 1027)","(56650, 1027)","(81459, 1464)","(81459, 1464)",True,True,False,False
+task_1-2,"(71823, 1047)","(71823, 1047)","(103071, 1489)","(103071, 1489)",True,True,False,False
+task_1-3,"(81329, 1050)","(81329, 1050)","(111454, 1492)","(111454, 1492)",True,True,False,False
+task_2-1,"(62529, 1028)","(62529, 1028)","(90021, 1465)","(90021, 1465)",True,True,False,False
+task_2-2,"(72676, 1047)","(72676, 1047)","(104079, 1489)","(104079, 1489)",True,True,False,False
+task_2-3,"(83335, 1050)","(83335, 1050)","(113550, 1492)","(113550, 1492)",True,True,False,False
+task_3-1,"(66030, 891)","(66030, 891)","(99690, 1357)","(99690, 1357)",True,True,False,False
+task_3-2,"(101474, 1063)","(101474, 1063)","(137190, 1495)","(137190, 1495)",True,True,False,False
+task_3-3,"(10829, 882)","(10829, 882)","(16037, 1331)","(16037, 1331)",True,True,False,False
+task_4-1,"(13404, 1065)","(13404, 1065)","(16739, 1494)","(16739, 1494)",True,True,False,False
+task_4-2,"(13404, 1065)","(13404, 1065)","(16739, 1494)","(16739, 1494)",True,True,False,False
+task_4-3,"(9408, 1007)","(9408, 1007)","(12427, 1432)","(12427, 1432)",True,True,False,False
+task_4-4,"(16570, 1110)","(16570, 1110)","(18072, 1547)","(18072, 1547)",True,True,False,False
+task_4-5,"(10305, 707)","(10305, 707)","(8245, 765)","(8245, 765)",True,True,False,False

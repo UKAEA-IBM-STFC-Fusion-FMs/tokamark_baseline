@@ -46,7 +46,7 @@ def _resample(shot_section, n_window):
 
 
 # ======================================================================================================================
-class LstmTransform_1:
+class ModelTransform_1:
 
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, dict_metadata, verbose=False):
@@ -177,7 +177,7 @@ class LstmTransform_1:
 
 
 # ======================================================================================================================
-class LstmTransform_2:
+class ModelTransform_2:
 
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, dict_metadata, verbose=False):
@@ -192,19 +192,19 @@ class LstmTransform_2:
                            "actuator": None, 
                            "output": None}
 
-        # self.lstm_dt = max(
+        # self.model_dt = max(
         #     self.dict_metadata[section][var]['dt']
         #     for section in ['input', 'actuator', 'output']
         #     for var in self.dict_metadata[section]
         # )
 
-        self.lstm_dt = 0.005
+        self.model_dt = 0.005
         self.list_n_windows = {
-            'input': int(min(max_input_length, self.dict_metadata['task_window_segmenter']['input_length']) / self.lstm_dt),  
-            'output': int(self.dict_metadata['task_window_segmenter']['output_length'] / self.lstm_dt),
-            'actuator': int( min(max_input_length, self.dict_metadata['task_window_segmenter']['input_length']) / self.lstm_dt 
-                        + self.dict_metadata['task_window_segmenter']['output_length'] / self.lstm_dt 
-                        + self.dict_metadata['task_window_segmenter']['delta'] / self.lstm_dt )
+            'input': int(min(max_input_length, self.dict_metadata['task_window_segmenter']['input_length']) / self.model_dt),  
+            'output': int(self.dict_metadata['task_window_segmenter']['output_length'] / self.model_dt),
+            'actuator': int( min(max_input_length, self.dict_metadata['task_window_segmenter']['input_length']) / self.model_dt 
+                        + self.dict_metadata['task_window_segmenter']['output_length'] / self.model_dt 
+                        + self.dict_metadata['task_window_segmenter']['delta'] / self.model_dt )
                         }
         # print(self.list_n_windows)
 
@@ -239,9 +239,7 @@ class LstmTransform_2:
 
         # # print('\n y')
         y_output = [data["values"] for var, data in shot["output"].items()]
-        # _resample(
-        #     shot["output"], self.dict_metadata["output"], self.lstm_dt
-        # )
+
 
         return {
             'input': [np.expand_dims(arr, axis=1) for arr in x_input + x_actuator_past],
