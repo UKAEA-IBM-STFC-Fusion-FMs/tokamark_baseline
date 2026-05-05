@@ -3,8 +3,7 @@
 This is a **deep learning baseline** for the **TokaMark benchmark**, which focuses on fusion plasma prediction tasks using the MAST (Mega Ampere Spherical Tokamak) dataset. The architecture implements a multi-branch CNN encoder-decoder model for time-series prediction.
 
 The code in this repository corresponds to the official implementation of the **TokaMark (CNN) baseline model** introduced in the 
-paper [TokaMark: A Comprehensive Benchmark for MAST Tokamak Plasma Models](https://arxiv.org/abs/2602.10132) (submitted
-to the 32nd SIGKDD Conference on Knowledge Discovery and Data Mining, 2026).
+paper [TokaMark: A Comprehensive Benchmark for MAST Tokamak Plasma Models](https://arxiv.org/abs/2602.10132).
 
 Companion resources:
 * <ins>**TokaMark:**</ins> A Python-based system for preprocessing fusion plasma data from the MAST (Mega Ampere Spherical 
@@ -29,37 +28,65 @@ pip install -e .
 pip install line-profiler==5.0.2 torchinfo==1.8.0
 ```
 
----
+## Usage
+
+### Training
+```bash
+python run_training.py --task task_1-1 --config_cnn /src/config/config_cnn_test.yaml --seed 23
+```
+
+### Evaluation
+```bash
+python run_evaluation.py --task task_1-1 --config_cnn /src/config/config_cnn_iterable_lr_4_work_4.yaml --seed 23
+```
 
 ## High-Level Architecture Overview
 
 ```mermaid
-graph TB
-    subgraph "Data Pipeline"
-        A[MAST Dataset] --> B[Data Preprocessing]
-        B --> C[TimeCNNTransform]
-        C --> D[DataLoader with Collation]
-    end
-    
-    subgraph "Model Architecture"
-        D --> E[Multi-Branch Encoder]
-        E --> F[Backbone Network]
-        F --> G[Multi-Branch Decoder]
-        G --> H[Predictions]
-    end
-    
-    subgraph "Training & Evaluation"
-        H --> I[MultiOutputMSELoss]
-        I --> J[BatchStepTrainer]
-        J --> K[Model Checkpointing]
-        K --> L[Evaluator]
-    end
-    
-    style A fill:#e1f5ff
-    style E fill:#ffe1e1
-    style F fill:#ffe1e1
-    style G fill:#ffe1e1
-    style J fill:#e1ffe1
+graph LR
+
+%% -------------------------
+%% DATA PIPELINE (bottom → top)
+%% -------------------------
+subgraph "Data Pipeline"
+    direction BT
+    A[MAST Dataset] --> C[Data Preprocessing]
+    C --> D[DataLoader with Collation]
+end
+
+%% -------------------------
+%% MODEL ARCHITECTURE
+%% -------------------------
+subgraph "Model Architecture"
+    direction BT
+    E[Multi-Branch Encoder] --> F[Backbone Network]
+    F --> G[Multi-Branch Decoder]
+    G --> H[Predictions]
+end
+
+%% -------------------------
+%% TRAINING & EVAL
+%% -------------------------
+subgraph "Training & Evaluation"
+    direction BT
+    I[MultiOutputMSELoss] --> J[BatchStepTrainer]
+    J --> L[Evaluator]
+end
+
+%% -------------------------
+%% CROSS-BLOCK FLOW (bottom → top feel)
+%% -------------------------
+D --> E
+H --> I
+
+%% -------------------------
+%% STYLING
+%% -------------------------
+style A fill:#e1f5ff
+style E fill:#ffe1e1
+style F fill:#ffe1e1
+style G fill:#ffe1e1
+style J fill:#e1ffe1
 ```
 
 ## Core Components
@@ -72,56 +99,28 @@ These scripts orchestrate the entire pipeline:
 - **Evaluation**: Loads trained models, performs inference, and computes metrics
 
 Key configuration:
-- Task selection (e.g., `task_1-1`, `task_4-5`)
+- Task selection (e.g., `task_1-1`)
 - CNN configuration via YAML files
 - Seed management for reproducibility
 
-### 2. **Data Transformation** (`src/time_cnn_transform.py`)
+### 2. **Data Transformation** (`src/model_transform.py`)
 
-The `TimeCNNTransform` class prepares data for the CNN:
+The `ModelTransform` class prepares data for the CNN:
 
 ```python
 # Transforms raw data into structured format:
 {
-    'x': [input_signals + actuator_signals],  # Model inputs
-    'y': [output_signals]                      # Prediction targets
+    'input': [input_signals],           # Model inputs
+    'exogenous': [actuator_signals],    # Actuators
+    'y': [output_signals]               # Prediction targets
 }
 ```
 
 **Key features:**
 - Handles temporal windowing for Markovian vs non-Markovian tasks
-- Adds channel dimension via `np.expand_dims()`
-- Moves time axis to first position with `np.moveaxis()`
+- Chunk input and actuator signals into 5ms windows
 
-### 3. **Model Architecture** (`src/time_cnn_model.py`)
-
-#### Multi-Branch CNN Model
-
-The `MultiBranchTimeCNNModel` is the core architecture:
-
-```mermaid
-graph LR
-    subgraph "Input Branches"
-        I1[1D Encoder] --> M[Merge]
-        I2[2D Encoder] --> M
-        I3[3D Encoder] --> M
-    end
-    
-    subgraph "Backbone"
-        M --> B1[Linear + ReLU]
-        B1 --> B2[Linear + ReLU]
-        B2 --> B3[Linear + ReLU]
-    end
-    
-    subgraph "Output Branches"
-        B3 --> O1[1D Decoder]
-        B3 --> O2[2D Decoder]
-        B3 --> O3[3D Decoder]
-    end
-    
-    style M fill:#ffe1e1
-    style B2 fill:#e1ffe1
-```
+### 3. **Encoder-Decoder Architecture** (`src/conv_encoders_decoders.py`)
 
 **Encoder Types:**
 - **`Conv1DEncoder`**: For time series (shape: `[channels, time]`)
@@ -132,6 +131,10 @@ graph LR
 - **`Conv1DDecoder`**: Reconstructs 1D outputs
 - **`Conv2DDecoder`**: Reconstructs 2D profiles
 - **`Conv3DDecoder`**: Reconstructs 3D volumes
+
+**Backbone:**
+- MLP-based: 3-layer MLP with dropout (0.2)
+- LSTM-based: seq2seq LSTM that encodes multimodal spatiotemporal inputs into a latent hidden state and decodes future trajectories conditioned the exogenous encoded state
 
 **Architecture Details:**
 - Each encoder compresses inputs to a fixed dimension `D` (default: 16)
@@ -184,11 +187,13 @@ Two main evaluation functions:
 ## Data Flow
 
 ```mermaid
+%%{init: {'themeVariables': { 'fontSize': '8px'}, 'sequence': {'actorMargin': 8, 'messageMargin': 8}}}%%
+
 sequenceDiagram
     participant D as MAST Dataset
-    participant T as TimeCNNTransform
+    participant T as ModelTransform
     participant L as DataLoader
-    participant M as CNN Model
+    participant M as Baseline Model
     participant Tr as Trainer
     
     D->>T: Raw shot data
@@ -203,20 +208,6 @@ sequenceDiagram
     Tr->>Tr: Update weights
 ```
 
-## Task Configuration
-
-The system supports multiple task types defined in YAML configs:
-
-- **Task 1-x**: Single-step prediction (Markovian)
-- **Task 2-x**: Multi-step prediction
-- **Task 3-x**: Sequence-to-sequence
-- **Task 4-x**: Long-horizon prediction (non-Markovian)
-
-Each task has different:
-- Input shapes (combinations of 1D/2D/3D signals)
-- Output shapes (scalars, profiles, images)
-- Temporal windows and stride settings
-
 ## Memory Optimization
 
 The architecture employs several memory-saving techniques:
@@ -230,11 +221,10 @@ The architecture employs several memory-saving techniques:
 ## Configuration Files
 
 Located in `src/config/`:
-- `config_cnn_test.yaml`: Quick testing configuration
-- `config_cnn_iterable_lr_4_work_4.yaml`: Production configuration
+- `config_model_test.yaml`: Quick testing configuration
+- `config_model.yaml`: Production configuration
 
 Configuration includes:
-- Model hyperparameters (D, layers, kernel sizes)
 - Training settings (learning rate, max steps, patience)
 - DataLoader settings (batch size, workers)
 - Path configurations
@@ -247,18 +237,6 @@ The system integrates with the **tokamark** package for:
 - Metric computation
 - Data splitting (train/val/test)
 
-## Usage
-
-### Training
-```bash
-python run_training.py --task task_1-1 --config_cnn /src/config/config_cnn_test.yaml --seed 23
-```
-
-### Evaluation
-```bash
-python run_evaluation.py --task task_1-1 --config_cnn /src/config/config_cnn_iterable_lr_4_work_4.yaml --seed 23
-```
-
 ## Architecture Summary
 
 This architecture provides a flexible, scalable baseline for fusion plasma prediction tasks with support for heterogeneous multi-modal time-series data. The multi-branch design allows the model to process different types of diagnostic signals (1D time series, 2D profiles, 3D images) simultaneously and produce predictions in various formats matching the physical quantities of interest.
@@ -270,3 +248,5 @@ This architecture provides a flexible, scalable baseline for fusion plasma predi
 | TokaMark paper | [arXiv:2602.10132](https://arxiv.org/abs/2602.10132) |
 | TokaMark repository | [UKAEA-IBM-STFC-Fusion-FMs/tokamark](https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark) |
 | TokaMark repository | [UKAEA-IBM-STFC-Fusion-FMs/tokamark](https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark_baseline) |
+
+---
