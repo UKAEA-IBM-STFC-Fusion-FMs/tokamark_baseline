@@ -30,9 +30,6 @@ from src.cnn_model_v2 import (
 from src.lstm_model_v3 import (
     create_lstm_v3_architecture
 )
-from src.lstm_model_v4 import (
-    create_lstm_v4_architecture
-)
 from src.model_transform import (
     ModelTransform_1,
     ModelTransform_2,
@@ -189,7 +186,7 @@ if __name__ == "__main__":
         SIGNAL_STATS = TEMPORAL_SPLIT_SIGNALS_STATS_FILE
     
     else:
-        print('SPLI UNKNOWN')
+        raise ValueError('Split Unknkwn')
         
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -297,18 +294,9 @@ if __name__ == "__main__":
             dict_metadata = dict_task_metadata | config_task,
             verbose=True
         )
-
-    elif args.model == 'lstm_v4':
-
-        model = create_lstm_v4_architecture(
-            dataloader_=train_dataloader,
-            dict_metadata = dict_task_metadata | config_task,
-            verbose=True
-        )
-
     else:
-        print('MODEL UNKNOWN')
-
+        raise ValueError('Model Unknown')
+        
     # ------------------------------------------------------------------------------------------------------------------
     # Training loop
     # ------------------------------------------------------------------------------------------------------------------

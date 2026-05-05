@@ -235,9 +235,9 @@ if __name__ == "__main__":
             dict_metadata = dict_task_metadata | config_task,
             verbose=True
         )
-    
+         
     else:
-        print('MODEL UNKNOWN')
+        print('Model Unknown')
 
     # -------------------------------------------------------------------
     # Training loop
