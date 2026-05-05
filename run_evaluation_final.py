@@ -43,11 +43,9 @@ from src.model_transform import (
 )
 from src.trainer import (
     model_collate_fn,
-    BatchStepTrainer,
 )
 
 from src.evaluator import (
-    # cnn_safety_vizu_per_shot,
     cnn_unstd_evaluation_per_shot,
 )
 

@@ -2,8 +2,7 @@ from typing import Dict, Any
 import numpy as np
 
 # ------------------------------------------------------------------------------------------------------------------
-max_input_length = 0.150
-# max_input_length = 0.050
+max_input_length = 0.050
 
 # ------------------------------------------------------------------------------------------------------------------
 def _spaced_windows_tensor(arr, n, L):
@@ -31,15 +30,12 @@ def _resample(shot_section, n_window):
         values = shot["values"]
 
         w_size = int(np.ceil(len(time) / n_window))
-        # print('n_window =', n_window)
 
         if w_size <= 0:
             raise ValueError(f"Invalid resampling factor for {var}")
 
         # Reshape windows
-        # print(f' {var} before :', values.shape)
         resampled_values = _spaced_windows_tensor(values, n_window, w_size)
-        # print(f' {var} after :', resampled_values.shape)
 
         resampled.append(resampled_values)
 
@@ -87,20 +83,9 @@ class ModelTransform_1:
 
             self.list_id_start_time_actuator.append(id_start_time)
             self.list_id_t_cut_time_actuator.append(id_t_cut_time)
-
-            # print('id_t_cut_time ', id_t_cut_time)
-            # print('id_start_time ', id_start_time)
  
     # ------------------------------------------------------------------------------------------------------------------
     def __call__(self, shot: Dict[str, Any]) -> Dict[str, Any]:
-        
-        # print("\nshot_id ", shot['shot_id'])
-        # print('input')
-        # print([ shot['input'][var]['values'].shape for var in shot['input'].keys() ])
-        # print('actuator')
-        # print([ shot['actuator'][var]['values'].shape for var in shot['actuator'].keys() ])
-        # print('output')
-        # print([ shot['output'][var]['values'].shape for var in shot['output'].keys() ])
 
         shot.update({
             "input": {
@@ -114,18 +99,6 @@ class ModelTransform_1:
                 }
                 for i, (var, data) in enumerate(shot["input"].items())
             },
-
-            # "actuator": {
-            #     var: {
-            #         "values": np.moveaxis(
-            #             data["values"][..., -self.list_id_start_time_actuator[i]:],
-            #             -1,
-            #             0
-            #         ),
-            #         "time": data["time"][-self.list_id_start_time_actuator[i]:]
-            #     }
-            #     for i, (var, data) in enumerate(shot["actuator"].items())
-            # },
 
             "actuator_past": {
                 var: {
@@ -164,16 +137,6 @@ class ModelTransform_1:
             }
         })
 
-        # print("\nshot_id ", shot['shot_id'])
-        # print('input')
-        # print([ shot['input'][var]['values'].shape for var in shot['input'].keys() ])
-        # print('actuator past')
-        # print([ shot['actuator_past'][var]['values'].shape for var in shot['actuator_past'].keys() ])
-        # print('actuator_future')
-        # print([ shot['actuator_future'][var]['values'].shape for var in shot['actuator_future'].keys() ])
-        # print('output')
-        # print([ shot['output'][var]['values'].shape for var in shot['output'].keys() ])
-
         return shot
 
 
@@ -193,12 +156,6 @@ class ModelTransform_2:
                            "actuator": None, 
                            "output": None}
 
-        # self.model_dt = max(
-        #     self.dict_metadata[section][var]['dt']
-        #     for section in ['input', 'actuator', 'output']
-        #     for var in self.dict_metadata[section]
-        # )
-
         self.model_dt = 0.005
         self.list_n_windows = {
             'input': int(min(max_input_length, self.dict_metadata['task_window_segmenter']['input_length']) / self.model_dt),  
@@ -207,8 +164,6 @@ class ModelTransform_2:
                         + self.dict_metadata['task_window_segmenter']['output_length'] / self.model_dt 
                         + self.dict_metadata['task_window_segmenter']['delta'] / self.model_dt )
                         }
-        # print(self.list_n_windows)
-
     # ------------------------------------------------------------------------------------------------------------------
     def __call__(self, shot: Dict[str, Any]) -> Dict[str, Any]:
 
@@ -218,20 +173,11 @@ class ModelTransform_2:
         x_input = _resample(
             shot["input"], self.list_n_windows["input"]
         )
-        # print([arr.shape for arr in x_input])
-        # print([np.expand_dims(arr, axis=1).shape for arr in x_input])
-
-        # # print('\n actuator')
-        # x_actuator = self._resample(
-        #     shot["actuator"], self.dict_metadata["actuator"], t_cut
-        # )
 
         # print('\n actuator past')
         x_actuator_past = _resample(
             shot["actuator_past"], self.list_n_windows["input"]
         )
-        # print([arr.shape for arr in x_actuator_past])
-        # print([np.expand_dims(arr, axis=1).shape for arr in x_actuator_past])
 
         # print('\n actuator future')
         x_actuator_future = _resample(
@@ -245,6 +191,5 @@ class ModelTransform_2:
         return {
             'input': [np.expand_dims(arr, axis=1) for arr in x_input + x_actuator_past],
             'exogenous': [np.expand_dims(arr, axis=1) for arr in x_actuator_future],
-            # 'y': [np.expand_dims(arr, axis=1) for arr in y_output]
             'y': y_output
         }

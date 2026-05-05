@@ -2,13 +2,11 @@ subset_of_shots:
 local: true
 
 dataloader_setting:
-  batch_size: 256 #512
+  batch_size: 512 #512
   num_workers: 8 #16
-  # shuffle: True
 
 training_args:
-  lr: 0.00001 #0.0001
-  # max_epochs: 500
+  lr: 0.0001 #0.0001
   max_steps: 10000000
   patience: 10
 

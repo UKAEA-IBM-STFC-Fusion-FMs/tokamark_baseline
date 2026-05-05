@@ -156,16 +156,6 @@ class LSTM_v3(nn.Module):
             self.input_branches.append(branch)
 
         # --------------------------------------------------------------------------------------------------------------
-        # self.backbone = nn.Sequential(
-        #     nn.Dropout(0.2),
-        #     nn.Linear(self.D*len(self.input_branches), 4*self.D),
-        #     nn.ReLU(),
-        #     nn.Linear(4*self.D, 2*self.D),
-        #     nn.ReLU(),
-        #     nn.Linear(2*self.D, self.D),
-        #     nn.ReLU(),
-        #     )
-
         self.encoder_lstm = nn.LSTM(
             input_size=self.D * bb_factor * len(self.input_branches),
             hidden_size= self.D * bb_factor,  # ✓ Keep at D
@@ -183,18 +173,6 @@ class LSTM_v3(nn.Module):
             batch_first=True,
             dropout=0.2
         )
-
-        # self.encoder_mlp = nn.Sequential(
-        #     nn.Linear(self.D * bb_factor * len(self.input_branches) * self.W_in, 2 * self.D * bb_factor),  # placeholder
-        #     nn.ReLU(),
-        #     nn.Linear(2 * self.D * bb_factor, self.D * bb_factor),
-        # )
-
-        # self.decoder_mlp = nn.Sequential(
-        #     nn.Linear(self.D * bb_factor * (1 + len(exogenous_shapes) * self.W_out ) , 2 * self.D * bb_factor),
-        #     nn.ReLU(),
-        #     nn.Linear(2 * self.D * bb_factor, self.D * bb_factor),
-        # )
 
         # --------------------------------------------------------------------------------------------------------------
         self.exogenous_branches = nn.ModuleList()
@@ -227,19 +205,13 @@ class LSTM_v3(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
     def _run_cnn_encoder(self, branch, x):
-        # print(' reshape before cnn', x.shape)
         B, W = x.shape[:2]  # batch, num_windows
         # merge batch and window dims
         x = x.view(B * W, *x.shape[2:])
         # pass through CNN
-        # print('before cnn', x.shape)
         out = branch(x)
-        # print('after cnn', out.shape)
         # restore dimensions
         out = out.view(B, W, -1)
-        # optionally aggregate windows (VERY important design choice)
-        # out = out.mean(dim=1)  # or sum / max / keep all
-        # print('after cnn', out.shape)
 
         return out
 
@@ -250,15 +222,10 @@ class LSTM_v3(nn.Module):
 
         # merge batch + windows for CNN
         x = x.reshape(B * W, *x.shape[2:])
-
         out = branch(x)
-
-        # print('after cnn decoder', out.shape)
-        # print('but goal shape is', goal_shape)
 
         # restore batch structure
         out = out.reshape(B, W * out.shape[2], *out.shape[3:])
-        # print('after batch reshape', out.shape)
 
         target_len = goal_shape[0]
 
@@ -318,18 +285,6 @@ class LSTM_v3(nn.Module):
         # -----------------------------
         # decoder conditioning
         # -----------------------------
-        # context = enc_out[:, -1:, :]
-        # context_seq = context.repeat(1, self.W_out, 1)
-
-        # if exo_seq is not None:
-        #     # print('THERE IS EXOGENOUS')
-        #     # print(context_seq.shape)
-        #     # print(exo_seq.shape)
-        #     decoder_input = torch.cat([context_seq, exo_seq], dim=2)
-        #     # print(decoder_input.shape)
-        # else:
-        #     decoder_input = context_seq
-
         B = enc_out.size(0)
 
         # repeat learned start token across batch and time
