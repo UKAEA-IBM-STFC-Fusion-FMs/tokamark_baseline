@@ -45,12 +45,12 @@ jupyter notebook download_tokamark_sample_data.ipynb
 
 ### Training
 ```bash
-python run_training.py --task task_1-1 --config_cnn /src/config/config_cnn_test.yaml --seed 23
+python run_training.py --task task_1-1 --config_cnn /src/config/config_model_test.yaml --seed 23
 ```
 
 ### Evaluation
 ```bash
-python run_evaluation.py --task task_1-1 --config_cnn /src/config/config_cnn_iterable_lr_4_work_4.yaml --seed 23
+python run_evaluation.py --task task_1-1 --config_cnn /src/config/config_model_test.yaml --seed 23
 ```
 
 ## High-Level Architecture Overview
