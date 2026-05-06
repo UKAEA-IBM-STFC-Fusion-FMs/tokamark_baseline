@@ -1,4 +1,5 @@
 subset_of_shots: 
+shuffle: true
 local: true
 
 store_manager_settings:

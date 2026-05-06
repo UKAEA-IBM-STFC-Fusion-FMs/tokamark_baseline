@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
     train_shots_, test_shots_, val_shots_ = get_train_test_val_shots(
         max_index=config["subset_of_shots"],
-        # shuffle=True,
+        shuffle=config["shuffle"],
         data_splits_file_path = DATA_SPLIT        
     )
 
