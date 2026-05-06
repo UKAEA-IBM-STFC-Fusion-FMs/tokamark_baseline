@@ -11,18 +11,23 @@ Tokamak) facility and providing benchmark tasks for machine learning models.
 
 ## Environment Setup
 
-1. Create and activate the required Conda environment and install the preprocessing packages from the **TokaMark** repository:
+1. Install this baseline repository and switch to **Neurips branch**:
 
 ```bash
-git clone https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark.git
+git clone --branch neurips-code --single-branch https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark_baseline.git
+```
+
+2. Create and activate the required Conda environment and install the preprocessing packages from the **TokaMark** repository:
+
+```bash
+git clone --branch neurips-code --single-branch  https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark.git
 cd <tokamark installation directory>
-git checkout neurips-code
 conda env create -f environment_basic.yml
 conda activate tokamark-env
 pip install -e .
 ```
 
-2. Install required **TokaMark Baseline** dependencies:
+3. Install required **TokaMark Baseline** dependencies:
 ```bash
 pip install line-profiler==5.0.2 torchinfo==1.8.0
 ```
