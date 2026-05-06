@@ -1,6 +1,9 @@
 subset_of_shots: 
 local: true
 
+store_manager_settings:
+  base_local_zarr_path: /rds/project/rds-mOlK9qn0PlQ/fairmast/upload-tmp/level2  # REMARK: Only relevant when `local` above is true.
+
 dataloader_setting:
   batch_size: 512 #512
   num_workers: 8 #16

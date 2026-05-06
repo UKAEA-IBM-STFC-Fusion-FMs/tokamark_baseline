@@ -1,6 +1,9 @@
 subset_of_shots: 8
 local: true
 
+store_manager_settings:
+  base_local_zarr_path: ./data  # REMARK: Only relevant when `local` above is true.
+
 dataloader_setting:
   batch_size: 2
   num_workers: 4 #16
