@@ -6,7 +6,7 @@ import numpy as np
 from torch.utils.checkpoint import checkpoint
 from torchinfo import summary
 
-from src.model_transform import _resample
+from src.model_transform import _resample, _make_dummy_outputs
 from src.conv_encoders_decoders import Conv1DEncoder, Conv2DEncoder, Conv3DEncoder, Conv1DDecoder, Conv2DDecoder, Conv3DDecoder
 from tokamark.tools.utils import get_device
 
@@ -23,10 +23,10 @@ layers_decoder = 3
 bb_factor = 2
 
 # ----------------------------------------------------------------------------------------------------------------------
-def create_cnn_v2_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
+def create_cnn_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
     
     if verbose:
-        print("\n\n----------CNN v2 MODEL INITIALIZATION----------\n")
+        print("\n\n----------CNN MODEL INITIALIZATION----------\n")
 
     # ------------------------------------------------------------
     # 1. Extract one valid sample for shape inference
@@ -55,7 +55,7 @@ def create_cnn_v2_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
     # ------------------------------------------------------------
     # 2. Create model (your CNN + Window + LSTM model)
     # ------------------------------------------------------------
-    model = CNN_v2(
+    model = MultiConv_MLP(
         input_shapes,
         exogenous_shapes,
         output_shapes,
@@ -70,8 +70,6 @@ def create_cnn_v2_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
     input_sizes = []
 
     for shape in ( input_shapes + exogenous_shapes ):
-        # shape is (C, T) or (C, T, H) etc.
-        # we add batch dimension only
         input_sizes.append((2,) + shape)
 
     # ------------------------------------------------------------
@@ -82,44 +80,7 @@ def create_cnn_v2_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
     return model
 
 # ======================================================================================================================
-import numpy as np
-
-def make_dummy_outputs(output_shapes, dict_metadata):
-
-    # lstm_dt = max(
-    #     dict_metadata[section][var]['dt']
-    #     for section in ['input', 'actuator', 'output']
-    #     for var in dict_metadata[section]
-    # )
-    lstm_dt = 0.005
-
-    shot_section = {}
-
-    for var, shape in zip(dict_metadata['output'].keys(), output_shapes):
-
-        print(var, shape)
-        # shape = (T, ...)
-        T = shape[0]
-
-        # create time axis
-        time = np.arange(T)
-
-        # create values
-        values = np.random.randn(*shape)
-
-        shot_section[var] = {
-            "time": time,
-            "values": values
-        }
-    
-    n_window = int(dict_metadata['task_window_segmenter']['output_length'] / lstm_dt)
-    y = _resample(shot_section, n_window)
-    y = [np.expand_dims(arr, axis=1) for arr in y]
-
-    return y
-
-# ======================================================================================================================
-class CNN_v2(nn.Module):
+class MultiConv_MLP(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
     def __init__(self, 
@@ -136,7 +97,7 @@ class CNN_v2(nn.Module):
         self.W_in = input_shapes[0][0]
 
         self.output_shapes = output_shapes
-        y = make_dummy_outputs(output_shapes, dict_metadata)
+        y = _make_dummy_outputs(output_shapes, dict_metadata)
         output_latent_shapes = [arr.shape for arr in y]
         print(output_latent_shapes)
         self.W_out = output_latent_shapes[0][0]
@@ -156,32 +117,6 @@ class CNN_v2(nn.Module):
             self.input_branches.append(branch)
 
         # --------------------------------------------------------------------------------------------------------------
-        # self.backbone = nn.Sequential(
-        #     nn.Dropout(0.2),
-        #     nn.Linear(self.D*len(self.input_branches), 4*self.D),
-        #     nn.ReLU(),
-        #     nn.Linear(4*self.D, 2*self.D),
-        #     nn.ReLU(),
-        #     nn.Linear(2*self.D, self.D),
-        #     nn.ReLU(),
-        #     )
-
-        # self.encoder_lstm = nn.LSTM(
-        #     input_size=self.D * bb_factor * len(self.input_branches),
-        #     hidden_size=self.D * bb_factor,  # ✓ Keep at D
-        #     num_layers=layers_encoder,
-        #     batch_first=True,
-        #     dropout=0.2
-        # )
-
-        # self.decoder_lstm = nn.LSTM(
-        #     input_size=self.D * bb_factor * (1 + len(exogenous_shapes)),  # ✓ Accept concatenated input
-        #     hidden_size=self.D * bb_factor,  # ✓ Keep at D (matches encoder)
-        #     num_layers=layers_decoder,
-        #     batch_first=True,
-        #     dropout=0.2
-        # )
-
         self.encoder_mlp = nn.Sequential(
             nn.Linear(self.D * bb_factor * len(self.input_branches) * self.W_in, 2 * self.D * bb_factor),
             nn.ReLU(),
@@ -225,19 +160,13 @@ class CNN_v2(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
     def _run_cnn_encoder(self, branch, x):
-        # print(' reshape before cnn', x.shape)
         B, W = x.shape[:2]  # batch, num_windows
         # merge batch and window dims
         x = x.view(B * W, *x.shape[2:])
         # pass through CNN
-        # print('before cnn', x.shape)
         out = branch(x)
-        # print('after cnn', out.shape)
         # restore dimensions
         out = out.view(B, W, -1)
-        # optionally aggregate windows (VERY important design choice)
-        # out = out.mean(dim=1)  # or sum / max / keep all
-        # print('after cnn', out.shape)
 
         return out
 
@@ -251,12 +180,8 @@ class CNN_v2(nn.Module):
 
         out = branch(x)
 
-        # print('after cnn decoder', out.shape)
-        # print('but goal shape is', goal_shape)
-
         # restore batch structure
         out = out.reshape(B, W * out.shape[2], *out.shape[3:])
-        # print('after batch reshape', out.shape)
 
         target_len = goal_shape[0]
 

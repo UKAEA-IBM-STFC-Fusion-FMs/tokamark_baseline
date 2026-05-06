@@ -21,49 +21,6 @@ device = get_device()
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-def cnn_collate_fn(batch, verbose=False):
-
-    full_flattened_batch = [
-        (
-            item["shot_id"],
-            item["window_index"],
-            [np.nan_to_num(np.array(x), nan=0.0) for x in item["x"]],
-            item["y"]
-            # [np.nan_to_num(np.array(y), nan=0.0) for y in item["y"]]
-        )
-        for item in batch
-    ]
-
-    if verbose:
-        print(
-            f"Collating batch of size = {len(batch)} shots to N = {len(full_flattened_batch)}"
-        )
-
-    return default_collate(full_flattened_batch) if (len(full_flattened_batch) > 0) else None
-
-# ----------------------------------------------------------------------------------------------------------------------
-def lstm_collate_fn(batch, verbose=False):
-
-    # print('in collate lstm')
-    full_flattened_batch = [
-        (
-            item["shot_id"],
-            item["window_index"],
-            [np.nan_to_num(np.array(x), nan=0.0) for x in item["input"] + item["exogenous"]],
-            item["y"]
-            # [np.nan_to_num(np.array(y), nan=0.0) for y in item["y"]]
-        )
-        for item in batch
-    ]
-
-    if verbose:
-        print(
-            f"Collating batch of size = {len(batch)} shots to N = {len(full_flattened_batch)}"
-        )
-
-    return default_collate(full_flattened_batch) if (len(full_flattened_batch) > 0) else None
-
-# ----------------------------------------------------------------------------------------------------------------------
 def model_collate_fn(batch, verbose=False):
 
     # print('in collate model')
@@ -89,29 +46,6 @@ def model_collate_fn(batch, verbose=False):
 # CNN LOSS
 # ----------------------------------------------------------------------------------------------------------------------
 
-# ======================================================================================================================
-# class MultiOutputMSELoss(nn.Module):
-
-#     # ------------------------------------------------------------------------------------------------------------------
-#     def __init__(self, reduction="mean"):
-#         super().__init__()
-#         self.reduction = reduction
-#     # ------------------------------------------------------------------------------------------------------------------
-#     def forward(self, y_preds, y_trues):
-
-#         if len(y_preds) != len(y_trues):
-#             raise ValueError("Mismatch in number of outputs.")
-
-#         losses = []
-#         for i, (yp, yt) in enumerate(zip(y_preds, y_trues)):                 
-
-#             if yp.shape != yt.shape:
-#                 raise ValueError(f"Shape mismatch at output {i}: {yp.shape} vs {yt.shape}")
-
-#             l_ = F.mse_loss(yp, yt, reduction=self.reduction)
-#             losses.append(l_)
-#         return torch.stack(losses).mean()
-
 class MultiOutputMSELoss(nn.Module):
 
     def __init__(self, reduction="mean"):
@@ -122,12 +56,6 @@ class MultiOutputMSELoss(nn.Module):
 
         if len(y_preds) != len(y_trues):
             raise ValueError("Mismatch in number of outputs.")
-
-        # for i, yt in enumerate(y_trues):
-        #     nan_count = torch.isnan(yt).sum().item()
-        #     total = yt.numel()
-        #     pct = 100 * nan_count / total
-        #     print(f"Output {i}: {pct:.2f}% NaNs ({nan_count}/{total})")
 
         losses = []
         for i, (yp, yt) in enumerate(zip(y_preds, y_trues)):

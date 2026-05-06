@@ -31,11 +31,11 @@ from tokamark.evaluator import (
 )
 
 
-from src.cnn_model_v2 import (
-    create_cnn_v2_architecture
+from src.multi_conv_mlp_model import (
+    create_cnn_architecture
 )
-from src.lstm_model_v3 import (
-    create_lstm_v3_architecture
+from src.multi_conv_lstm_model import (
+    create_lstm_architecture
 )
 from src.model_transform import (
     ModelTransform_1,
@@ -221,7 +221,7 @@ if __name__ == "__main__":
 
     if args.model == 'cnn':
 
-        model = create_cnn_v2_architecture(
+        model = create_cnn_architecture(
             dataloader_=test_dataloader,
             dict_metadata = dict_task_metadata | config_task,
             verbose=True
@@ -229,7 +229,7 @@ if __name__ == "__main__":
 
     elif args.model == 'lstm':
 
-        model = create_lstm_v3_architecture(
+        model = create_lstm_architecture(
             dataloader_=test_dataloader,
             dict_metadata = dict_task_metadata | config_task,
             verbose=True

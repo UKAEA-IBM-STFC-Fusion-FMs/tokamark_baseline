@@ -6,7 +6,7 @@ import numpy as np
 from torch.utils.checkpoint import checkpoint
 from torchinfo import summary
 
-from src.model_transform import _resample
+from src.model_transform import _resample, _make_dummy_outputs
 from src.conv_encoders_decoders import Conv1DEncoder, Conv2DEncoder, Conv3DEncoder, Conv1DDecoder, Conv2DDecoder, Conv3DDecoder
 from tokamark.tools.utils import get_device
 
@@ -23,7 +23,7 @@ layers_decoder = 3
 bb_factor = 2
 
 # ----------------------------------------------------------------------------------------------------------------------
-def create_lstm_v3_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
+def create_lstm_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
     
     if verbose:
         print("\n\n----------LSTM v3 MODEL INITIALIZATION----------\n")
@@ -82,43 +82,6 @@ def create_lstm_v3_architecture(dataloader_, dict_metadata, D=16, verbose=True,)
     return model
 
 # ======================================================================================================================
-import numpy as np
-
-def make_dummy_outputs(output_shapes, dict_metadata):
-
-    # lstm_dt = max(
-    #     dict_metadata[section][var]['dt']
-    #     for section in ['input', 'actuator', 'output']
-    #     for var in dict_metadata[section]
-    # )
-    lstm_dt = 0.005
-
-    shot_section = {}
-
-    for var, shape in zip(dict_metadata['output'].keys(), output_shapes):
-
-        print(var, shape)
-        # shape = (T, ...)
-        T = shape[0]
-
-        # create time axis
-        time = np.arange(T)
-
-        # create values
-        values = np.random.randn(*shape)
-
-        shot_section[var] = {
-            "time": time,
-            "values": values
-        }
-    
-    n_window = int(dict_metadata['task_window_segmenter']['output_length'] / lstm_dt)
-    y = _resample(shot_section, n_window)
-    y = [np.expand_dims(arr, axis=1) for arr in y]
-
-    return y
-
-# ======================================================================================================================
 class LSTM_v3(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -136,7 +99,7 @@ class LSTM_v3(nn.Module):
         self.W_in = input_shapes[0][0]
 
         self.output_shapes = output_shapes
-        y = make_dummy_outputs(output_shapes, dict_metadata)
+        y = _make_dummy_outputs(output_shapes, dict_metadata)
         output_latent_shapes = [arr.shape for arr in y]
         print(output_latent_shapes)
         self.W_out = output_latent_shapes[0][0]

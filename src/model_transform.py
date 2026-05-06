@@ -41,6 +41,36 @@ def _resample(shot_section, n_window):
 
     return resampled
 
+# ======================================================================================================================
+def _make_dummy_outputs(output_shapes, dict_metadata):
+
+    model_dt = 0.005
+
+    shot_section = {}
+
+    for var, shape in zip(dict_metadata['output'].keys(), output_shapes):
+
+        print(var, shape)
+        # shape = (T, ...)
+        T = shape[0]
+
+        # create time axis
+        time = np.arange(T)
+
+        # create values
+        values = np.random.randn(*shape)
+
+        shot_section[var] = {
+            "time": time,
+            "values": values
+        }
+    
+    n_window = int(dict_metadata['task_window_segmenter']['output_length'] / model_dt)
+    y = _resample(shot_section, n_window)
+    y = [np.expand_dims(arr, axis=1) for arr in y]
+
+    return y
+
 
 # ======================================================================================================================
 class ModelTransform_1:
