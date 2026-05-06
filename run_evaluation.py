@@ -172,7 +172,6 @@ if __name__ == "__main__":
         use_std_scaling=True,
         stats_metadata_file_path=SIGNAL_STATS,
         use_nan_filling=False,
-        return_incomplete_shots=True,
         remove_outliers=True,
         outlier_metadata_file=OUTLIER_FILE,
         remove_bad_efit_rating=True,
@@ -224,7 +223,7 @@ if __name__ == "__main__":
         model = create_cnn_architecture(
             dataloader_=test_dataloader,
             dict_metadata = dict_task_metadata | config_task,
-            verbose=True
+            verbose=False
         )
 
     elif args.model == 'lstm':
@@ -232,7 +231,7 @@ if __name__ == "__main__":
         model = create_lstm_architecture(
             dataloader_=test_dataloader,
             dict_metadata = dict_task_metadata | config_task,
-            verbose=True
+            verbose=False
         )
          
     else:

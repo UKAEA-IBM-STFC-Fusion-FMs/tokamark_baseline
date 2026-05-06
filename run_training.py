@@ -113,16 +113,13 @@ if __name__ == "__main__":
 
     # Load Task YAML config
     config_task = get_task_config(task_name=args.task)
-    print(config_task)
 
     # Load CNN YAML config
     with open(REPO_ROOT + args.config, "r") as f:
         config = yaml.safe_load(f)
-    print(config)
 
     SEED = args.seed
     set_seed(SEED)
-    print(SEED)
 
     # ------------------------------------------------------------------------------------------------------------------
     # Initialize task-specific metadata
@@ -160,9 +157,7 @@ if __name__ == "__main__":
         config['dataloader_setting']['num_workers'] = 4
 
     else:
-        print('Task not known!')
-
-    print('num worker to ', config['dataloader_setting']['num_workers'])
+        print('Task Unknown')
 
     dict_task_metadata = get_task_metadata(
         config_task=config_task,
@@ -208,7 +203,6 @@ if __name__ == "__main__":
         use_std_scaling=True,
         stats_metadata_file_path=SIGNAL_STATS,
         use_nan_filling=False,
-        return_incomplete_shots=True,
         remove_outliers=True,
         outlier_metadata_file=OUTLIER_FILE,
         remove_bad_efit_rating=True,
@@ -222,7 +216,6 @@ if __name__ == "__main__":
         use_std_scaling=True,
         stats_metadata_file_path=SIGNAL_STATS,
         use_nan_filling=False,
-        return_incomplete_shots=True,
         remove_outliers=True,
         outlier_metadata_file=OUTLIER_FILE,
         remove_bad_efit_rating=True,
@@ -286,7 +279,7 @@ if __name__ == "__main__":
         model = create_cnn_architecture(
             dataloader_=train_dataloader,
             dict_metadata = dict_task_metadata | config_task,
-            verbose=True
+            verbose=False
         )
 
     elif args.model == 'lstm':
@@ -294,7 +287,7 @@ if __name__ == "__main__":
         model = create_lstm_architecture(
             dataloader_=train_dataloader,
             dict_metadata = dict_task_metadata | config_task,
-            verbose=True
+            verbose=False
         )
     else:
         raise ValueError('Model Unknown')
