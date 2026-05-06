@@ -9,8 +9,6 @@ Companion resources:
 * <ins>**TokaMark:**</ins> A Python-based system for preprocessing fusion plasma data from the MAST (Mega Ampere Spherical 
 Tokamak) facility and providing benchmark tasks for machine learning models.
 
----
-
 ## Environment Setup
 
 1. Create and activate the required Conda environment and install the preprocessing packages from the **TokaMark** repository:
@@ -26,6 +24,13 @@ pip install -e .
 2. Install required **TokaMark Baseline** dependencies:
 ```bash
 pip install line-profiler==5.0.2 torchinfo==1.8.0
+```
+
+## Download Sample Data
+
+To download the required sample dataset, run the provided Jupyter notebook:
+```bash
+jupyter notebook /home/ir-rous1/rds/rds-ukaea-ap002-mOlK9qn0PlQ/ir-rous1/output/cnn-baseline/download_tok
 ```
 
 ## Usage
