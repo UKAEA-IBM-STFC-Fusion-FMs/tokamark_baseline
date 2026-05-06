@@ -247,6 +247,22 @@ This architecture provides a flexible, scalable baseline for fusion plasma predi
 |---|---|
 | TokaMark paper | [arXiv:2602.10132](https://arxiv.org/abs/2602.10132) |
 | TokaMark repository | [UKAEA-IBM-STFC-Fusion-FMs/tokamark](https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark) |
-| TokaMark repository | [UKAEA-IBM-STFC-Fusion-FMs/tokamark](https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark_baseline) |
 
----
+## Citing TokaMark
+
+A preprint version of the manuscript is available [here](https://arxiv.org/abs/2602.10132).
+
+If you use TokaMark, please cite our work as:
+
+    @article{rousseau2026tokamark,
+      title={TokaMark: A Comprehensive Benchmark for MAST Tokamak Plasma Models},
+      author={
+        Rousseau, C{\'e}cile and Jackson, Samuel and Ordonez-Hurtado, Rodrigo H. and
+        Amorisco, Nicola C. and Boschi, Tobia and Holt, George K and Loreti, Andrea and 
+        Sz{\'e}kely, Eszter and Whittle, Alexander and Agnello, Adriano and Pamela, Stanislas and 
+        Pascale, Alessandra and Akers, Robert and Bernabe Moreno, Juan and Thorne, Sue and 
+        Zayats, Mykhaylo
+      },
+      journal={arXiv preprint arXiv:2602.10132},
+      year={2026}
+    }
