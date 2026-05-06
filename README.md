@@ -15,13 +15,14 @@ Tokamak) facility and providing benchmark tasks for machine learning models.
 
 ```bash
 git clone --branch neurips-code --single-branch https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark_baseline.git
+cd tokamark_baseline
 ```
 
 2. Create and activate the required Conda environment and install the preprocessing packages from the **TokaMark** repository:
 
 ```bash
 git clone --branch neurips-code --single-branch  https://github.com/UKAEA-IBM-STFC-Fusion-FMs/tokamark.git
-cd <tokamark installation directory>
+cd tokamark
 conda env create -f environment_basic.yml
 conda activate tokamark-env
 pip install -e .
@@ -36,7 +37,8 @@ pip install line-profiler==5.0.2 torchinfo==1.8.0
 
 To download the required sample dataset, run the provided Jupyter notebook:
 ```bash
-jupyter notebook /home/ir-rous1/rds/rds-ukaea-ap002-mOlK9qn0PlQ/ir-rous1/output/cnn-baseline/download_tokamark_sample_data.ipynb
+cd tokamark_baseline
+jupyter notebook download_tokamark_sample_data.ipynb
 ```
 
 ## Usage
