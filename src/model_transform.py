@@ -50,7 +50,6 @@ def _make_dummy_outputs(output_shapes, dict_metadata):
 
     for var, shape in zip(dict_metadata['output'].keys(), output_shapes):
 
-        print(var, shape)
         # shape = (T, ...)
         T = shape[0]
 

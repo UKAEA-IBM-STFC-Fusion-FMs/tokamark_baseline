@@ -23,7 +23,7 @@ layers_decoder = 3
 bb_factor = 2
 
 # ----------------------------------------------------------------------------------------------------------------------
-def create_cnn_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
+def create_cnn_architecture(dataloader_, dict_metadata, D=16, verbose=True):
     
     if verbose:
         print("\n\n----------CNN MODEL INITIALIZATION----------\n")
@@ -32,8 +32,6 @@ def create_cnn_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
     # 1. Extract one valid sample for shape inference
     # ------------------------------------------------------------
     for l, first_window in enumerate(dataloader_.dataset):
-        print(l)
-        print(first_window['shot_id'])
 
         try:
             input_shapes = [arr.shape for arr in first_window["input"]]
@@ -75,7 +73,8 @@ def create_cnn_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
     # ------------------------------------------------------------
     # 4. Model summary
     # ------------------------------------------------------------
-    summary(model, input_size=input_sizes)
+    if verbose:
+        summary(model, input_size=input_sizes)
 
     return model
 
@@ -99,7 +98,6 @@ class MultiConv_MLP(nn.Module):
         self.output_shapes = output_shapes
         y = _make_dummy_outputs(output_shapes, dict_metadata)
         output_latent_shapes = [arr.shape for arr in y]
-        print(output_latent_shapes)
         self.W_out = output_latent_shapes[0][0]
 
         # --------------------------------------------------------------------------------------------------------------

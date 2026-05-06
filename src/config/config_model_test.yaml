@@ -6,7 +6,7 @@ store_manager_settings:
 
 dataloader_setting:
   batch_size: 2
-  num_workers: 4 #16
+  num_workers: 0 #16
   # shuffle: True
 
 training_args:
