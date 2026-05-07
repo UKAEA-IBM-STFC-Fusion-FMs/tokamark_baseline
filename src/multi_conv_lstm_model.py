@@ -172,7 +172,8 @@ class LSTM_v3(nn.Module):
             self.output_branches.append(branch)
 
     # ------------------------------------------------------------------------------------------------------------------
-    def _run_cnn_encoder(self, branch, x):
+    @staticmethod
+    def _run_cnn_encoder(branch, x):
         B, W = x.shape[:2]  # batch, num_windows
         # merge batch and window dims
         x = x.view(B * W, *x.shape[2:])
@@ -184,7 +185,8 @@ class LSTM_v3(nn.Module):
         return out
 
     # ------------------------------------------------------------------------------------------------------------------
-    def _run_cnn_decoder(self, branch, goal_shape, x):
+    @staticmethod
+    def _run_cnn_decoder(branch, goal_shape, x):
 
         B, W = x.shape[:2]
 
