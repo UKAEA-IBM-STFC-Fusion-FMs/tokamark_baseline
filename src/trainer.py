@@ -3,16 +3,16 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data._utils.collate import default_collate
+# import torch.nn.functional as F
 
-# Set device
 from tokamark.tools.utils import get_device
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+# Default values
 
-device = get_device()
+DEVICE = get_device()
 # print(f"Using device: {device}\n")
 
 
@@ -91,7 +91,7 @@ class MultiOutputMSELoss(nn.Module):
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-def move_batch_to_device(batch, device):
+def move_batch_to_device(batch, device=DEVICE):
     _, _, x, y = batch
     x = [t.to(device=device, dtype=torch.float32) for t in x]
     y = [t.to(device=device, dtype=torch.float32) for t in y]
@@ -99,7 +99,7 @@ def move_batch_to_device(batch, device):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-def train_step(model, batch, optimizer, criterion, device):
+def train_step(model, batch, optimizer, criterion, device=DEVICE):
     model.train()  # Ensure model is in training mode
     
     x, y = move_batch_to_device(batch, device)
@@ -117,7 +117,7 @@ def train_step(model, batch, optimizer, criterion, device):
 
 # ----------------------------------------------------------------------------------------------------------------------
 @torch.no_grad()
-def validate(model, loader, criterion, device, count_stats=False, return_stats=False):
+def validate(model, loader, criterion, device=DEVICE, count_stats=False, return_stats=False):
     model.eval()
 
     total_loss = 0.0
@@ -174,8 +174,8 @@ class BatchStepTrainer:
         max_steps,
         patience,
         output_dir,
-        device,
-        validate_every=100,  # validate every k batches
+        device=DEVICE,
+        validate_every=100,  # Validate every k batches
         verbose=True,
     ):
         self.model = model
@@ -258,7 +258,7 @@ class BatchStepTrainer:
                 
                 # Print statistics
                 print(f"\n{'='*60}")
-                print(f"FIRST EPOCH STATISTICS:")
+                print("FIRST EPOCH STATISTICS:")
                 print(f"{'='*60}")
                 print(f"Train - Total samples: {self.train_sample_count}")
                 print(f"Train - Unique shots: {len(self.train_unique_shots)}")
