@@ -1,12 +1,12 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np 
 from torch.utils.checkpoint import checkpoint
 from torchinfo import summary
+# import torch.nn.functional as F
+# import numpy as np
 
-from src.model_transform import _resample, _make_dummy_outputs
+from src.model_transform import _make_dummy_outputs  # _resample
 from src.conv_encoders_decoders import Conv1DEncoder, Conv2DEncoder, Conv3DEncoder, Conv1DDecoder, Conv2DDecoder, Conv3DDecoder
 from tokamark.tools.utils import get_device
 
@@ -27,6 +27,10 @@ def create_lstm_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
     
     if verbose:
         print("\n\n----------LSTM v3 MODEL INITIALIZATION----------\n")
+
+    input_shapes = []
+    exogenous_shapes = []
+    output_shapes = []
 
     # ------------------------------------------------------------
     # 1. Extract one valid sample for shape inference
@@ -85,13 +89,14 @@ def create_lstm_architecture(dataloader_, dict_metadata, D=16, verbose=True,):
 class LSTM_v3(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, 
-                    input_shapes, 
-                    exogenous_shapes,
-                    output_shapes,
-                    dict_metadata,
-                    D=16
-                ):
+    def __init__(  # NOSONAR - Ignore cognitive complexity
+        self,
+        input_shapes,
+        exogenous_shapes,
+        output_shapes,
+        dict_metadata,
+        D=16
+    ):
 
         super().__init__()
 
