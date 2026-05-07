@@ -100,12 +100,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         type=str,
+        choices=["cnn", "lstm"],
         default="cnn",
         help="Model type to train."
     )
     parser.add_argument(
         "--split",
         type=str,
+        choices=["random", "temporal"],
         default="random",
         help="Splitting used."
     )
@@ -138,20 +140,21 @@ if __name__ == "__main__":
     # Load correct settings
     # ------------------------------------------------------------------------------------------------------------------
 
-    if args.split == 'random':
+    if args.split == "random":
 
         DATA_SPLIT = RANDOM_SPLIT_TOKAMARK_DATA_SPLITS_FILE
         OUTLIER_FILE = RANDOM_SPLIT_OUTLIER_METADATA_FILE
         SIGNAL_STATS = RANDOM_SPLIT_SIGNALS_STATS_FILE
 
-    elif args.split == 'temporal':
+    elif args.split == "temporal":
 
         DATA_SPLIT = TEMPORAL_SPLIT_TOKAMARK_DATA_SPLITS_FILE
         OUTLIER_FILE = TEMPORAL_SPLIT_OUTLIER_METADATA_FILE
         SIGNAL_STATS = TEMPORAL_SPLIT_SIGNALS_STATS_FILE
     
     else:
-        print('SPLIT UNKNOWN')
+        print("Unknown split.")
+        raise ValueError("Unknown split.")
 
     # ------------------------------------------------------------------------------------------------------------------
     # Initialize MAST datasets
@@ -218,7 +221,7 @@ if __name__ == "__main__":
     # Initialize Model
     # ------------------------------------------------------------------------------------------------------------------
 
-    if args.model == 'cnn':
+    if args.model == "cnn":
 
         model = create_cnn_architecture(
             dataloader_=test_dataloader,
@@ -226,7 +229,7 @@ if __name__ == "__main__":
             verbose=False
         )
 
-    elif args.model == 'lstm':
+    elif args.model == "lstm":
 
         model = create_lstm_architecture(
             dataloader_=test_dataloader,
@@ -235,7 +238,8 @@ if __name__ == "__main__":
         )
          
     else:
-        print('Model Unknown')
+        print("Model Unknown")
+        raise ValueError("Unknown model.")
 
     # -------------------------------------------------------------------
     # Training loop
@@ -257,7 +261,13 @@ if __name__ == "__main__":
 
     # cnn_safety_vizu_per_shot(test_dataloader_vizu, config_task, cnn_model, base_model_dir, n_shot_to_plot=3)
     accumulator = WindowMetricsAccumulator(args.task)
-    cnn_unstd_evaluation_per_shot(test_dataloader, config_task, model, base_model_dir, accumulator)
+    cnn_unstd_evaluation_per_shot(
+        test_dataloader=test_dataloader,
+        config_task=config_task,
+        cnn_model=model,
+        output_dir=base_model_dir,
+        accumulator=accumulator
+    )
     
     compute_metrics(
         task=args.task,
