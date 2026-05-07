@@ -16,11 +16,13 @@ KERNEL_SIZE = 3
 STRIDE = 3
 LAYERS_ENCODER = 3
 LAYERS_DECODER = 3
-BB_FACTOR = 2
+BB_FACTOR = 3
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-def compute_compressed_size_encoder(L, layers, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=PADDING):
+def compute_compressed_size_encoder(
+        L, layers, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=PADDING
+    ):
     for _ in range(layers):
         L = (L + 2*padding - kernel_size) // stride + 1
         L = (L + 2*padding - 2) // 2 + 1
@@ -45,7 +47,7 @@ def compute_list_compressed_size_decoder(
 class Conv1DEncoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, input_shape, D, layers, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=PADDING, bb_factor=3):
+    def __init__(self, input_shape, D, layers=LAYERS_ENCODER, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=PADDING, bb_factor=BB_FACTOR):
         super().__init__()
 
         self.D = D
@@ -106,7 +108,7 @@ class Conv1DEncoder(nn.Module):
 class Conv1DDecoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, output_shape, D, layers=2, kernel_size=3, stride=2, padding=1, bb_factor=3, output_padding=1):
+    def __init__(self, output_shape, D, layers=LAYERS_DECODER, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=PADDING, bb_factor=BB_FACTOR, output_padding=1):
 
         super().__init__()
 
@@ -176,7 +178,7 @@ class Conv1DDecoder(nn.Module):
 class Conv2DEncoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, input_shape, D, layers=2, kernel_size=3, stride=2, padding=1, bb_factor=3):
+    def __init__(self, input_shape, D, layers=LAYERS_ENCODER, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=PADDING, bb_factor=BB_FACTOR):
 
         super().__init__()
 
@@ -248,11 +250,11 @@ class Conv2DDecoder(nn.Module):
         self,
         output_shape,
         D,
-        layers,
+        layers=LAYERS_DECODER,
         kernel_size=KERNEL_SIZE,
         stride=STRIDE,
         padding=PADDING,
-        bb_factor=3,
+        bb_factor=BB_FACTOR,
         output_padding=1
     ):
 
@@ -328,7 +330,7 @@ class Conv2DDecoder(nn.Module):
 class Conv3DEncoder(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, input_shape, D, layers, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=PADDING, bb_factor=3):
+    def __init__(self, input_shape, D, layers=LAYERS_ENCODER, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=PADDING, bb_factor=BB_FACTOR):
 
         super().__init__()
 
@@ -401,11 +403,11 @@ class Conv3DDecoder(nn.Module):
         self,
         output_shape,
         D,
-        layers,
+        layers=LAYERS_DECODER,
         kernel_size=KERNEL_SIZE,
         stride=STRIDE,
         padding=PADDING,
-        bb_factor=3,
+        bb_factor=BB_FACTOR,
         output_padding=1
     ):
 
