@@ -82,7 +82,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--task",
         type=str,
-        default="task_2-1",
+        default="task_1-1",
         help="The name of the task available in the benchmark",
     )
     parser.add_argument(
