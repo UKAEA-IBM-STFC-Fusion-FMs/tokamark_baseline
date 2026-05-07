@@ -1,12 +1,12 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np 
 from torch.utils.checkpoint import checkpoint
 from torchinfo import summary
+# import torch.nn.functional as F
+# import numpy as np
 
-from src.model_transform import _resample, _make_dummy_outputs
+from src.model_transform import _make_dummy_outputs  # _resample
 from src.conv_encoders_decoders import Conv1DEncoder, Conv2DEncoder, Conv3DEncoder, Conv1DDecoder, Conv2DDecoder, Conv3DDecoder
 from tokamark.tools.utils import get_device
 
@@ -31,6 +31,11 @@ def create_cnn_architecture(dataloader_, dict_metadata, D=16, verbose=True):
     # ------------------------------------------------------------
     # 1. Extract one valid sample for shape inference
     # ------------------------------------------------------------
+
+    input_shapes = []
+    exogenous_shapes = []
+    output_shapes = []
+
     for l, first_window in enumerate(dataloader_.dataset):
 
         try:
@@ -54,9 +59,9 @@ def create_cnn_architecture(dataloader_, dict_metadata, D=16, verbose=True):
     # 2. Create model (your CNN + Window + LSTM model)
     # ------------------------------------------------------------
     model = MultiConv_MLP(
-        input_shapes,
-        exogenous_shapes,
-        output_shapes,
+        input_shapes=input_shapes,
+        exogenous_shapes=exogenous_shapes,
+        output_shapes=output_shapes,
         dict_metadata=dict_metadata,
         D=D,
     ).to(device)
@@ -82,13 +87,14 @@ def create_cnn_architecture(dataloader_, dict_metadata, D=16, verbose=True):
 class MultiConv_MLP(nn.Module):
 
     # ------------------------------------------------------------------------------------------------------------------
-    def __init__(self, 
-                    input_shapes, 
-                    exogenous_shapes,
-                    output_shapes,
-                    dict_metadata,
-                    D=16
-                ):
+    def __init__(  # NOSONAR - Ignore cognitive complexity
+        self,
+        input_shapes,
+        exogenous_shapes,
+        output_shapes,
+        dict_metadata,
+        D=16
+    ):
 
         super().__init__()
 
