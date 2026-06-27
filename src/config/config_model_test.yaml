@@ -15,5 +15,20 @@ training_args:
   max_steps: 500
   patience: 3
 
+# Transformer world-model hyper-parameters (only used when --model transformer).
+wm:
+  D: 16
+  embed_dim:
+  embed_dim_act:
+  mem_window:
+
+predictor:
+  depth: 4
+  heads: 4
+  dim_head: 32
+  mlp_dim:
+  dropout: 0.1
+  emb_dropout: 0.0
+
 paths:
   data_output_directory: /output_test

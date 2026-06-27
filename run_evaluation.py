@@ -37,6 +37,9 @@ from src.multi_conv_mlp_model import (
 from src.multi_conv_lstm_model import (
     create_lstm_architecture
 )
+from src.multi_conv_transformer_model import (
+    create_transformer_architecture
+)
 from src.model_transform import (
     ModelTransform_1,
     ModelTransform_2,
@@ -236,7 +239,17 @@ if __name__ == "__main__":
             dict_metadata = dict_task_metadata | config_task,
             verbose=False
         )
-         
+
+    elif args.model == "transformer":
+
+        model = create_transformer_architecture(
+            dataloader_=test_dataloader,
+            dict_metadata = dict_task_metadata | config_task,
+            wm_config=config.get("wm"),
+            predictor_config=config.get("predictor"),
+            verbose=False
+        )
+
     else:
         print("Model Unknown")
         raise ValueError("Unknown model.")

@@ -14,5 +14,20 @@ training_args:
   max_steps: 10000000
   patience: 10
 
+# Transformer world-model hyper-parameters (only used when --model transformer).
+wm:
+  D: 16                # base CNN channel width (per-variable token width = D * bb_factor)
+  embed_dim:           # state-token width; empty/null -> D * bb_factor
+  embed_dim_act:       # action-token width; empty/null -> D * bb_factor
+  mem_window:          # rollout memory window (#tokens); empty/null -> full history
+
+predictor:
+  depth: 4
+  heads: 4
+  dim_head: 32
+  mlp_dim:             # empty/null -> 4 * embed_dim
+  dropout: 0.1
+  emb_dropout: 0.0
+
 paths:
   data_output_directory: /output
